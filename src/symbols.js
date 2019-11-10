@@ -1,4 +1,5 @@
 // @flow
+/* eslint-disable no-sparse-arrays */
 /**
  * This file holds a list of all no-argument functions and single-character
  * symbols (like 'a' or ';').
@@ -53,10 +54,8 @@ const symbols: {[Mode]: CharInfoMap} = {
 };
 export default symbols;
 
-const make = {
-    "main": {},
-    "ams": {},
-};
+type Glyph = {[string]: any};
+const GlyphTable: (number | string | Glyph)[] = [];
 
 /** `acceptUnicodeChar = true` is only applicable if `replace` is set. */
 export function defineSymbol(
@@ -65,12 +64,12 @@ export function defineSymbol(
     group: Group,
     replace: ?string,
     name: string,
-    texFont?: string | boolean | {},
+    glyph?: string | boolean | Glyph,
     acceptUnicodeChar?: boolean,
 ) {
-    if (typeof texFont === "boolean") {
-        acceptUnicodeChar = texFont;
-        texFont = undefined;
+    if (typeof glyph === "boolean") {
+        acceptUnicodeChar = glyph;
+        glyph = undefined;
     }
 
     symbols[mode][name] = {font, group, replace};
@@ -80,30 +79,39 @@ export function defineSymbol(
     }
 
     if (replace) {
-        const code = ('0000' +
-            replace.charCodeAt(0).toString(16).toUpperCase()).slice(-4);
-        const val = make[font][code];
-        if (font === ams && !texFont) {
-            texFont = AMSSym[name.replace('@', '')];
+        const code = replace.charCodeAt(0);
+        let val = GlyphTable[code];
+        if (font === ams && !glyph) {
+            glyph = AMSSym[name.replace('@', '')];
         }
-        if (!texFont) {
+        if (!glyph) {
             if (val == null) {
-                make[font][code] = code;
+                GlyphTable[code] = code;
             }
-        } else if (val != null && val !== code) {
-            console.warn(`Duplicate definition for ${replace}, ${val}`);
+        } else if (val != null && typeof val !== "number") {
+            if (typeof val === "string") {
+                val = {name: val};
+                GlyphTable[code] = val;
+            }
+            if (typeof glyph === "string") {
+                glyph = {name: glyph};
+            }
+            Object.assign(val, glyph);
+            console.warn(`Merging definition for ${replace}`);
         } else {
-            make[font][code] = typeof texFont === "string" ? [texFont] : texFont;
+            GlyphTable[code] = glyph;
         }
     }
 }
 
-function findFile(name) {
-    return path.join(__dirname, '..', 'lib', name);
+function findFile(name: string): string {
+    return name.endsWith(".enc")
+        ? path.join("/usr/share/texlive/texmf-dist/fonts/enc/dvips/tetex", name)
+        : path.join(__dirname, '..', 'lib', name);
 }
 
-function readGlyphList() {
-    const result = {};
+function readGlyphList(): string[][] {
+    const result = [];
     let gl = fs.readFileSync( findFile('texglyphlist.txt'), 'utf8')
         + fs.readFileSync(findFile('glyphlist.txt'), 'utf8');
     gl = gl.split("\n");
@@ -112,21 +120,30 @@ function readGlyphList() {
         if (!line || line[0] === "#") {
             continue;
         }
-        const [name, code] = line.split(";");
-        if (!result[code]) {
-            result[code] = [];
-        }
-        result[code].push(name);
+        const [name, codes] = line.split(";");
+        codes.split(",").forEach(code => {
+            if (code.length !== 4) {
+                return;
+            }
+            code = parseInt(code, 16);
+            if (!code) {
+                return;
+            }
+            if (!result[code]) {
+                result[code] = [];
+            }
+            result[code].push(name);
+        });
     }
     return result;
 }
 
-function readAMSSym() {
+function readAMSSym(): {[string]: Glyph} {
     const result = {};
     const amssym = fs.readFileSync(findFile('amssym.tex'), 'utf8');
     const r = /^\\newsymbol(\\[A-Za-z]+) ([12])\d([0-9A-F][0-9A-F])/gm;
     let m;
-    while ((m = r.exec(amssym)) != null) {
+    while ((m = r.exec(amssym)) != null && m != null) {
         result[m[1]] = m[2] === '1'
             ? {msam: parseInt(m[3], 16)}
             : {msbm: parseInt(m[3], 16)};
@@ -134,8 +151,8 @@ function readAMSSym() {
     return result;
 }
 
-function readEncodingFile(file) {
-    const encoding = fs.readFileSync(file, 'utf8')
+function readEncodingFile(file: string): string[] {
+    const encoding = fs.readFileSync(findFile(file), 'utf8')
         .replace(/%.*$/gm, '')
         .replace(/\s+/g, ' ');
     const codes = encoding.match(/\/.*\[([^\]]*)\] def/);
@@ -144,6 +161,25 @@ function readEncodingFile(file) {
     }
     return codes[1].replace(/[ /]+/g, ' ').trim().split(' ');
 }
+
+const EncodingTable: {[string]: {fonts: string[], map: string[]}} = {
+    "f7b6d320": {fonts: ["cmr", "cmbx", "cmss", "cmssbx", "cmssi"], map: []},
+    "74afc74c": {fonts: ["cmbxti", "cmti"], map: []},
+    "09fbbfac": {fonts: ["cmtt"], map: []},
+    "aae443f0": {fonts: ["cmmi", "cmmib"], map: []},
+    "bbad153f": {fonts: ["cmsy"], map: []},
+    "10037936": {fonts: ["cmbsy"], map: []},
+    "_": {fonts: ["cmex1", "cmex2", "cmex3", "cmex4", "msam", "msbm"], map: []},
+};
+
+for (const enc in EncodingTable) {
+    if (EncodingTable.hasOwnProperty(enc) && enc !== '_') {
+        EncodingTable[enc].map = readEncodingFile(enc + ".enc");
+    }
+}
+
+const GlyphList = readGlyphList();
+const AMSSym = readAMSSym();
 
 // Some abbreviations for commonly used strings.
 // This helps minify the code, and also spotting typos using jshint.
@@ -168,24 +204,6 @@ const punct = "punct";
 const rel = "rel";
 const spacing = "spacing";
 const textord = "textord";
-
-const EncodingTable = {
-    "f7b6d320": readEncodingFile(
-        "/usr/share/texlive/texmf-dist/fonts/enc/dvips/tetex/f7b6d320.enc"),
-    "74afc74c": readEncodingFile(
-        "/usr/share/texlive/texmf-dist/fonts/enc/dvips/tetex/74afc74c.enc"),
-    "09fbbfac": readEncodingFile(
-        "/usr/share/texlive/texmf-dist/fonts/enc/dvips/tetex/09fbbfac.enc"),
-    "aae443f0": readEncodingFile(
-        "/usr/share/texlive/texmf-dist/fonts/enc/dvips/tetex/aae443f0.enc"),
-    "bbad153f": readEncodingFile(
-        "/usr/share/texlive/texmf-dist/fonts/enc/dvips/tetex/bbad153f.enc"),
-    "10037936": readEncodingFile(
-        "/usr/share/texlive/texmf-dist/fonts/enc/dvips/tetex/10037936.enc"),
-};
-
-const GlyphList = readGlyphList();
-const AMSSym = readAMSSym();
 
 // Now comes the symbol table
 
@@ -915,13 +933,13 @@ defineSymbol(math, main, textord, "%", "\\%");
 defineSymbol(text, main, textord, "%", "\\%");
 defineSymbol(math, main, textord, "_", "\\_", {
     name: "endash",
-    cmr: [0, -310],
-    cmti: [0, -310],
-    cmbx: [0, -310],
-    cmbxti: [0, -310],
-    cmss: [0, -350],
-    cmssi: [0, -350],
-    cmssbx: [0, -350],
+    cmr: [, 0, -310],
+    cmti: [, 0, -310],
+    cmbx: [, 0, -310],
+    cmbxti: [, 0, -310],
+    cmss: [, 0, -350],
+    cmssi: [, 0, -350],
+    cmssbx: [, 0, -350],
     cmtt: "underscore",
 });
 defineSymbol(text, main, textord, "_", "\\_");
@@ -1027,20 +1045,53 @@ defineSymbol(math, main, bin, "\u2228", "\\lor");
 defineSymbol(math, main, bin, "\u2227", "\\wedge", true);
 defineSymbol(math, main, bin, "\u2228", "\\vee", true);
 defineSymbol(math, main, textord, "\u221a", "\\surd", {
-    name: "radical",
-    cmsy: [0, 760],
-    cmbsy: [0, 760],
+    cmsy: [, 0, 760],
+    cmbsy: [, 0, 760],
+    cmex1: [0x70],
+    cmex2: [0x71],
+    cmex3: [0x72],
+    cmex4: [0x73],
 });
-defineSymbol(math, main, open, "(", "(");
-defineSymbol(math, main, open, "[", "[");
-defineSymbol(math, main, open, "\u27e8", "\\langle", true);
+defineSymbol(math, main, open, "(", "(", {
+    cmex1: [0x00],
+    cmex2: [0x10],
+    cmex3: [0x12],
+    cmex4: [0x20],
+});
+defineSymbol(math, main, open, "[", "[", {
+    cmex1: [0x02],
+    cmex2: [0x68],
+    cmex3: [0x14],
+    cmex4: [0x22],
+});
+defineSymbol(math, main, open, "\u27e8", "\\langle", {
+    cmex1: [0x0A],
+    cmex2: [0x44],
+    cmex3: [0x1C],
+    cmex4: [0x2A],
+}, true);
 defineSymbol(math, main, open, "\u2223", "\\lvert");
 defineSymbol(math, main, open, "\u2225", "\\lVert");
-defineSymbol(math, main, close, ")", ")");
-defineSymbol(math, main, close, "]", "]");
+defineSymbol(math, main, close, ")", ")", {
+    cmex1: [0x01],
+    cmex2: [0x11],
+    cmex3: [0x13],
+    cmex4: [0x21],
+});
+defineSymbol(math, main, close, "]", "]", {
+    cmex1: [0x03],
+    cmex2: [0x69],
+    cmex3: [0x15],
+    cmex4: [0x23],
+});
 defineSymbol(math, main, close, "?", "?");
 defineSymbol(math, main, close, "!", "!");
-defineSymbol(math, main, close, "\u27e9", "\\rangle", true);
+defineSymbol(math, main, close, "\u27e9", "\\rangle", {
+    cmex1: [0x0B],
+    cmex2: [0x45],
+    cmex3: [0x1D],
+    cmex4: [0x2B],
+}, true);
 defineSymbol(math, main, close, "\u2223", "\\rvert");
 defineSymbol(math, main, close, "\u2225", "\\rVert");
 defineSymbol(math, main, rel, "=", "=");
@@ -1135,10 +1186,20 @@ defineSymbol(math, main, bin, "\u22c4", "\\diamond");
 defineSymbol(math, main, bin, "\u22c6", "\\star");
 defineSymbol(math, main, bin, "\u25c3", "\\triangleleft", "triangleleft");
 defineSymbol(math, main, bin, "\u25b9", "\\triangleright", "triangleright");
-defineSymbol(math, main, open, "{", "\\{");
+defineSymbol(math, main, open, "{", "\\{", {
+    cmex1: [0x08],
+    cmex2: [0x6E],
+    cmex3: [0x1A],
+    cmex4: [0x28],
+});
 defineSymbol(text, main, textord, "{", "\\{");
 defineSymbol(text, main, textord, "{", "\\textbraceleft");
-defineSymbol(math, main, close, "}", "\\}");
+defineSymbol(math, main, close, "}", "\\}", {
+    cmex1: [0x09],
+    cmex2: [0x6F],
+    cmex3: [0x1B],
+    cmex4: [0x29],
+});
 defineSymbol(text, main, textord, "}", "\\}");
 defineSymbol(text, main, textord, "}", "\\textbraceright");
 defineSymbol(math, main, open, "{", "\\lbrace");
@@ -1151,26 +1212,56 @@ defineSymbol(math, main, open, "(", "\\lparen");
 defineSymbol(math, main, close, ")", "\\rparen");
 defineSymbol(text, main, textord, "<", "\\textless"); // in T1 fontenc
 defineSymbol(text, main, textord, ">", "\\textgreater"); // in T1 fontenc
-defineSymbol(math, main, open, "\u230a", "\\lfloor", true);
-defineSymbol(math, main, close, "\u230b", "\\rfloor", true);
-defineSymbol(math, main, open, "\u2308", "\\lceil", true);
-defineSymbol(math, main, close, "\u2309", "\\rceil", true);
-defineSymbol(math, main, textord, "\\", "\\backslash");
-defineSymbol(math, main, textord, "\u2223", "|", "bar");
+defineSymbol(math, main, open, "\u230a", "\\lfloor", {
+    cmex1: [0x04],
+    cmex2: [0x6A],
+    cmex3: [0x16],
+    cmex4: [0x24],
+}, true);
+defineSymbol(math, main, close, "\u230b", "\\rfloor", {
+    cmex1: [0x05],
+    cmex2: [0x6B],
+    cmex3: [0x17],
+    cmex4: [0x25],
+}, true);
+defineSymbol(math, main, open, "\u2308", "\\lceil", {
+    cmex1: [0x06],
+    cmex2: [0x6C],
+    cmex3: [0x18],
+    cmex4: [0x26],
+}, true);
+defineSymbol(math, main, close, "\u2309", "\\rceil", {
+    cmex1: [0x07],
+    cmex2: [0x6D],
+    cmex3: [0x19],
+    cmex4: [0x27],
+}, true);
+defineSymbol(math, main, textord, "\\", "\\backslash", {
+    cmex1: [0x0F],
+    cmex2: [0x2F],
+    cmex3: [0x1F],
+    cmex4: [0x2D],
+});
+defineSymbol(math, main, textord, "\u2223", "|", {
+    name: "bar",
+    cmex1: [0x0C],
+});
 defineSymbol(math, main, textord, "\u2223", "\\vert");
 defineSymbol(text, main, textord, "|", "\\textbar"); // in T1 fontenc
-defineSymbol(math, main, textord, "\u2225", "\\|");
+defineSymbol(math, main, textord, "\u2225", "\\|", {
+    cmex1: [0x0D],
+});
 defineSymbol(math, main, textord, "\u2225", "\\Vert");
 defineSymbol(text, main, textord, "\u2225", "\\textbardbl");
 defineSymbol(text, main, textord, "~", "\\textasciitilde", {
     name: "tilde",
-    cmr: [0, -350],
-    cmti: [0, -350],
-    cmbx: [0, -350],
-    cmbxti: [0, -350],
-    cmss: [0, -350],
-    cmssi: [0, -350],
-    cmssbx: [0, -350],
+    cmr: [, 0, -350],
+    cmti: [, 0, -350],
+    cmbx: [, 0, -350],
+    cmbxti: [, 0, -350],
+    cmss: [, 0, -350],
+    cmssi: [, 0, -350],
+    cmssbx: [, 0, -350],
     cmtt: "asciitilde",
 });
 defineSymbol(text, main, textord, "\\", "\\textbackslash");
@@ -1178,31 +1269,109 @@ defineSymbol(text, main, textord, "^", "\\textasciicircum", {
     name: "circumflex",
     cmtt: "asciicircum",
 });
-defineSymbol(math, main, rel, "\u2191", "\\uparrow", true);
-defineSymbol(math, main, rel, "\u21d1", "\\Uparrow", true);
-defineSymbol(math, main, rel, "\u2193", "\\downarrow", true);
-defineSymbol(math, main, rel, "\u21d3", "\\Downarrow", true);
+defineSymbol(math, main, rel, "\u2191", "\\uparrow", {
+    cmex1: [0x78],
+}, true);
+defineSymbol(math, main, rel, "\u21d1", "\\Uparrow", {
+    cmex1: [0x7E],
+}, true);
+defineSymbol(math, main, rel, "\u2193", "\\downarrow", {
+    cmex1: [0x79],
+}, true);
+defineSymbol(math, main, rel, "\u21d3", "\\Downarrow", {
+    cmex1: [0x7F],
+}, true);
 defineSymbol(math, main, rel, "\u2195", "\\updownarrow", true);
 defineSymbol(math, main, rel, "\u21d5", "\\Updownarrow", true);
-defineSymbol(math, main, op, "\u2210", "\\coprod");
-defineSymbol(math, main, op, "\u22c1", "\\bigvee");
-defineSymbol(math, main, op, "\u22c0", "\\bigwedge");
-defineSymbol(math, main, op, "\u2a04", "\\biguplus");
-defineSymbol(math, main, op, "\u22c2", "\\bigcap");
-defineSymbol(math, main, op, "\u22c3", "\\bigcup");
-defineSymbol(math, main, op, "\u222b", "\\int");
+defineSymbol(math, main, op, "\u2210", "\\coprod", {
+    cmex1: [0x60],
+    cmex2: [0x61],
+});
+defineSymbol(math, main, op, "\u22c1", "\\bigvee", {
+    cmex1: [0x57],
+    cmex2: [0x5F],
+});
+defineSymbol(math, main, op, "\u22c0", "\\bigwedge", {
+    cmex1: [0x56],
+    cmex2: [0x5E],
+});
+defineSymbol(math, main, op, "\u2a04", "\\biguplus", {
+    cmex1: [0x55],
+    cmex2: [0x5D],
+});
+defineSymbol(math, main, op, "\u22c2", "\\bigcap", {
+    cmex1: [0x54],
+    cmex2: [0x5C],
+});
+defineSymbol(math, main, op, "\u22c3", "\\bigcup", {
+    cmex1: [0x53],
+    cmex2: [0x5B],
+});
+defineSymbol(math, main, op, "\u222b", "\\int", {
+    cmex1: [0x52],
+    cmex2: [0x5A],
+});
 defineSymbol(math, main, op, "\u222b", "\\intop");
-defineSymbol(math, main, op, "\u222c", "\\iint");
-defineSymbol(math, main, op, "\u222d", "\\iiint");
-defineSymbol(math, main, op, "\u220f", "\\prod");
-defineSymbol(math, main, op, "\u2211", "\\sum");
-defineSymbol(math, main, op, "\u2a02", "\\bigotimes");
-defineSymbol(math, main, op, "\u2a01", "\\bigoplus");
-defineSymbol(math, main, op, "\u2a00", "\\bigodot");
-defineSymbol(math, main, op, "\u222e", "\\oint");
+defineSymbol(math, main, op, "\u222c", "\\iint", {
+    Size1: [
+        'Select(0u222B)', 'Copy()',
+        'Select(0u222C)', 'Paste()',
+        'PasteWithOffset(347,0)',
+        'SetRBearing(347,1)',
+    ],
+    Size2:[
+        'Select(0u222B)', 'Copy()',
+        'Select(0u222C)', 'Paste()',
+        'PasteWithOffset(528,0)',
+        'SetRBearing(528,1)',
+    ],
+});
+defineSymbol(math, main, op, "\u222d", "\\iiint", {
+    Size1: [
+        'Select(0u222B)', 'Copy()',
+        'Select(0u222D)', 'Paste()',
+        'PasteWithOffset(347,0)',
+        'PasteWithOffset(694,0)',
+        'SetRBearing(694,1)',
+    ],
+    Size2:[
+        'Select(0u222B)', 'Copy()',
+        'Select(0u222D)', 'Paste()',
+        'PasteWithOffset(528,0)',
+        'PasteWithOffset(1036,0)',
+        'SetRBearing(1036,1)',
+    ],
+});
+defineSymbol(math, main, op, "\u220f", "\\prod", {
+    cmex1: [0x51],
+    cmex2: [0x59],
+});
+defineSymbol(math, main, op, "\u2211", "\\sum", {
+    cmex1: [0x50],
+    cmex2: [0x58],
+});
+defineSymbol(math, main, op, "\u2a02", "\\bigotimes", {
+    cmex1: [0x4E],
+    cmex2: [0x4F],
+});
+defineSymbol(math, main, op, "\u2a01", "\\bigoplus", {
+    cmex1: [0x4C],
+    cmex2: [0x4D],
+});
+defineSymbol(math, main, op, "\u2a00", "\\bigodot", {
+    cmex1: [0x4A],
+    cmex2: [0x4B],
+});
+defineSymbol(math, main, op, "\u222e", "\\oint", {
+    cmex1: [0x48],
+    cmex2: [0x49],
+});
 defineSymbol(math, main, op, "\u222f", "\\oiint");
 defineSymbol(math, main, op, "\u2230", "\\oiiint");
-defineSymbol(math, main, op, "\u2a06", "\\bigsqcup");
+defineSymbol(math, main, op, "\u2a06", "\\bigsqcup", {
+    cmex1: [0x46],
+    cmex2: [0x47],
+});
 defineSymbol(math, main, op, "\u222b", "\\smallint");
 defineSymbol(text, main, inner, "\u2026", "\\textellipsis");
 defineSymbol(math, main, inner, "\u2026", "\\mathellipsis");
@@ -1284,9 +1453,8 @@ defineSymbol(math, main, accent, "\u02d8", "\\breve");
 defineSymbol(math, main, accent, "\u02c7", "\\check");
 defineSymbol(math, main, accent, "\u005e", "\\hat");
 defineSymbol(math, main, accent, "\u20d7", "\\vec", {
-    name: "vector",
-    cmmi: [-653, 0, 153],
-    cmmib: [-729, 0, 154],
+    cmmi: [, -653, 0, 153],
+    cmmib: [, -729, 0, 154],
 });
 defineSymbol(math, main, accent, "\u02d9", "\\dot");
 defineSymbol(math, main, accent, "\u02da", "\\mathring");
@@ -1304,8 +1472,16 @@ defineSymbol(text, main, textord, "\u0152", "\\OE", true);
 defineSymbol(text, main, textord, "\u00d8", "\\O", true);
 defineSymbol(text, main, accent, "\u02ca", "\\'"); // acute
 defineSymbol(text, main, accent, "\u02cb", "\\`"); // grave
-defineSymbol(text, main, accent, "\u02c6", "\\^"); // circumflex
-defineSymbol(text, main, accent, "\u02dc", "\\~"); // tilde
+defineSymbol(text, main, accent, "\u02c6", "\\^", {
+    cmex1: [0x62],
+    cmex2: [0x63],
+    cmex3: [0x64],
+}); // circumflex
+defineSymbol(text, main, accent, "\u02dc", "\\~", {
+    cmex1: [0x65],
+    cmex2: [0x66],
+    cmex3: [0x67],
+}); // tilde
 defineSymbol(text, main, accent, "\u02c9", "\\="); // macron
 defineSymbol(text, main, accent, "\u02d8", "\\u"); // breve
 defineSymbol(text, main, accent, "\u02d9", "\\."); // dot above
@@ -1338,13 +1514,13 @@ defineSymbol(text, main, textord, "\u201d", "\\textquotedblright");
 //  \degree from gensymb package
 defineSymbol(math, main, textord, "\u00b0", "\\degree", {
     name: "ring",
-    cmr: [-125, 0, -125],
-    cmti: [-160, 0, -160],
-    cmbx: [-147, 0, -147],
-    cmbxti: [-160, 0],
-    cmss: [-142, 0, -142],
-    cmssi: [-113, 0, 113],
-    cmssbx: [-58, 0, -58],
+    cmr: [, -125, 0, -125],
+    cmti: [, -160, 0, -160],
+    cmbx: [, -147, 0, -147],
+    cmbxti: [, -160, 0],
+    cmss: [, -142, 0, -142],
+    cmssi: [, -113, 0, 113],
+    cmssbx: [, -58, 0, -58],
 }, true);
 defineSymbol(text, main, textord, "\u00b0", "\\degree");
 // \textdegree from inputenc package
@@ -1363,7 +1539,12 @@ defineSymbol(text, main, spacing, "\u00a0", " ");
 defineSymbol(text, main, spacing, "\u00a0", "~");
 
 defineSymbol(math, main, textord, ".", ".");
-defineSymbol(math, main, textord, "/", "/");
+defineSymbol(math, main, textord, "/", "/", {
+    cmex1: [0x0E],
+    cmex2: [0x2E],
+    cmex3: [0x1E],
+    cmex4: [0x2C],
+});
 defineSymbol(math, main, textord, '"', '"', "quotedblright");
 defineSymbol(math, main, textord, "@", "@");
 defineSymbol(text, main, textord, "*", "*");
@@ -1514,110 +1695,96 @@ defineSymbol(text, main, textord, "\u201c", "“");
 defineSymbol(text, main, textord, "\u201d", "”");
 
 const FontTable = {
-    "f7b6d320": {
-        "Main": {},
-    },
-    "74afc74c": {
-        "Main": {},
-    },
-    "09fbbfac": {
-        "Main": {},
-    },
-    "aae443f0": {
-        "Main": {},
-        "Math": {},
-        "Cal": {},
-    },
-    "bbad153f": {
-        "Main": {},
-        "Cal": {},
-    },
-    "10037936": {
-        "Main": {},
-        "Cal": {},
-    },
+    "Main-Regular": {cmr: [], cmmi: [], cmsy: [], extra: []},
+    "Main-Bold": {cmbx: [], cmmib: [], cmbsy: [], extra: []},
+    "Main-Italic": {cmti: [], extra: []},
+    "Main-BoldItalic": {cmbxti: [], extra: []},
+    "Math-Italic": {cmmi: [], extra: []},
+    "Math-BoldItalic": {cmmib: [], extra: []},
+    "AMS": {msam: [], msbm: [], extra: []},
+    "Size1": {cmex1: [], extra: []},
+    "Size2": {cmex2: [], extra: []},
+    "Size3": {cmex3: [], extra: []},
+    "Size4": {cmex4: [], extra: []},
+    "Caligraphic-Regular": {cmmi: [], cmsy: [], extra: []},
+    "Caligraphic-Bold": {cmmib: [], cmbsy: [], extra: []},
+    "SansSerif-Regular": {cmss: [], extra: []},
+    "SansSerif-Italic": {cmssi: [], extra: []},
+    "SansSerif-Bold": {cmssbx: [], extra: []},
+    "Typewriter": {cmtt: [], extra: []},
+    "Fraktur-Regular": {eufm: [], extra: []},
+    "Fraktur-Bold": {eufb: [], extra: []},
+    "Script": {rsfs: [], extra: []},
 };
 
-function findGlyph(ch, val) {
-    let found = false;
-    for (let i = 0; i < val.length; i++) {
+function findGlyphName(names: ?number | string | string[]): string {
+    if (typeof names === "number") {
+        names = GlyphList[names];
+    } else if (typeof names === "string") {
+        names = [names];
+    }
+    if (names == null) {
+        return "";
+    }
+    for (let i = 0; i < names.length; i++) {
         for (const enc in EncodingTable) {
-            if (EncodingTable.hasOwnProperty(enc)) {
-                const index = EncodingTable[enc].findIndex(x => x === val[i]);
-                if (index >= 0) {
-                    found = true;
-                    const code = ("00" + index.toString(16)).slice(-2);
-                    switch (enc) {
-                        case "f7b6d320":
-                        case "74afc74c":
-                        case "09fbbfac":
-                            if (FontTable[enc]["Main"][code] == null) {
-                                FontTable[enc]["Main"][code] = [];
-                            }
-                            FontTable[enc]["Main"][code].push(ch);
-                            break;
-                        case "aae443f0":
-                            if (index <= 0x27 ||
-                                    (index >= 0x41 && index <= 0x5A) ||
-                                    (index >= 0x61 && index <= 0x7A)) {
-                                if (FontTable[enc]["Math"][code] == null) {
-                                    FontTable[enc]["Math"][code] = [];
-                                }
-                                FontTable[enc]["Math"][code].push(ch);
-                            } else if (index >= 0x30 && index <= 0x39) {
-                                if (FontTable[enc]["Cal"][code] == null) {
-                                    FontTable[enc]["Cal"][code] = [];
-                                }
-                                FontTable[enc]["Cal"][code].push(ch);
-                            } else {
-                                if (FontTable[enc]["Main"][code] == null) {
-                                    FontTable[enc]["Main"][code] = [];
-                                }
-                                FontTable[enc]["Main"][code].push(ch);
-                            }
-                            break;
-                        case "bbad153f":
-                        case "10037936":
-                            if (index >= 0x41 && index <= 0x5A) {
-                                if (FontTable[enc]["Cal"][code] == null) {
-                                    FontTable[enc]["Cal"][code] = [];
-                                }
-                                FontTable[enc]["Cal"][code].push(ch);
-                            } else {
-                                if (FontTable[enc]["Main"][code] == null) {
-                                    FontTable[enc]["Main"][code] = [];
-                                }
-                                FontTable[enc]["Main"][code].push(ch);
-                            }
-                            break;
+            if (EncodingTable.hasOwnProperty(enc) &&
+                    EncodingTable[enc].map.indexOf(names[i]) >= 0) {
+                return names[i];
+            }
+        }
+    }
+    return "";
+}
+
+GlyphTable.forEach((val, ch) => {
+    let found = false;
+    let property;
+    if (typeof val === "object") {
+        for (const font in val) {
+            if (val.hasOwnProperty(font) && FontTable[font]) {
+                found = true;
+                FontTable[font].extra.push(val[font]);
+            }
+        }
+        property = val;
+        val = val.name || ch;
+    }
+    const name = findGlyphName(val);
+
+    for (const enc in EncodingTable) {
+        if (EncodingTable.hasOwnProperty(enc)) {
+            const index = EncodingTable[enc].map.indexOf(name);
+            EncodingTable[enc].fonts.forEach(tf => {
+                let idx = index;
+                let prop = property && property[tf];
+                if (Array.isArray(prop)) {
+                    if (prop[0] != null) {
+                        idx = prop[0];
+                    }
+                    prop = prop.slice(1);
+                } else if (prop != null) {
+                    idx = prop;
+                    prop = null;
+                }
+                if (typeof idx === "string") {
+                    idx = EncodingTable[enc].map.indexOf(idx);
+                }
+                if (idx === -1) {
+                    return;
+                }
+                for (const f in FontTable) {
+                    if (FontTable.hasOwnProperty(f) && FontTable[f][tf]) {
+                        found = true;
+                        FontTable[f][tf][ch] = prop ? {idx, prop} : idx;
                     }
                 }
-            }
-        }
-        if (found) break;
-    }
-    if (!found) console.warn(`Not found ${ch}`);
-}
-
-for (const ch in make[main]) {
-    if (make[main].hasOwnProperty(ch)) {
-        let val = make[main][ch];
-        if (typeof val === "string") {
-            val = GlyphList[val];
-        }
-        if (val == null) {
-            console.warn(`Unknown ${ch}`);
-            continue;
-        }
-        if (Array.isArray(val) || val.name) {
-            if (val.name) {
-                val = [val.name];
-            }
-            findGlyph(ch, val);
-        } else {
-            console.warn(`Not implemented ${ch}`);
+            });
         }
     }
-}
+    if (!found) {
+        console.warn(`No action for ${String.fromCharCode(ch)}`);
+    }
+});
 
-console.log(make[ams]);
+console.log(FontTable);
