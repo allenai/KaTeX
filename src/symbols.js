@@ -64,7 +64,7 @@ export function defineSymbol(
     group: Group,
     replace: ?string,
     name: string,
-    glyph?: string | boolean | Glyph,
+    glyph?: boolean | string | Glyph,
     acceptUnicodeChar?: boolean,
 ) {
     if (typeof glyph === "boolean") {
@@ -81,14 +81,13 @@ export function defineSymbol(
     if (replace) {
         const code = replace.charCodeAt(0);
         let val = GlyphTable[code];
-        if (font === ams && !glyph) {
-            glyph = AMSSym[name.replace('@', '')];
-        }
         if (!glyph) {
             if (val == null) {
                 GlyphTable[code] = code;
             }
         } else if (val != null && typeof val !== "number") {
+            console.warn(`Merging definition ${JSON.stringify(glyph)
+                } into ${JSON.stringify(val)} for ${replace}`);
             if (typeof val === "string") {
                 val = {name: val};
                 GlyphTable[code] = val;
@@ -97,7 +96,6 @@ export function defineSymbol(
                 glyph = {name: glyph};
             }
             Object.assign(val, glyph);
-            console.warn(`Merging definition for ${replace}`);
         } else {
             GlyphTable[code] = glyph;
         }
@@ -105,9 +103,7 @@ export function defineSymbol(
 }
 
 function findFile(name: string): string {
-    return name.endsWith(".enc")
-        ? path.join("/usr/share/texlive/texmf-dist/fonts/enc/dvips/tetex", name)
-        : path.join(__dirname, '..', 'lib', name);
+    return path.join(__dirname, '..', 'lib', name);
 }
 
 function readGlyphList(): string[][] {
@@ -138,48 +134,49 @@ function readGlyphList(): string[][] {
     return result;
 }
 
-function readAMSSym(): {[string]: Glyph} {
-    const result = {};
-    const amssym = fs.readFileSync(findFile('amssym.tex'), 'utf8');
-    const r = /^\\newsymbol(\\[A-Za-z]+) ([12])\d([0-9A-F][0-9A-F])/gm;
-    let m;
-    while ((m = r.exec(amssym)) != null && m != null) {
-        result[m[1]] = m[2] === '1'
-            ? {msam: parseInt(m[3], 16)}
-            : {msbm: parseInt(m[3], 16)};
+function readAFM(file: string): string[] {
+    const result = [];
+    const afm = fs.readFileSync(file, 'utf8');
+    const start = afm.match(/^StartCharMetrics (\d+)/m);
+    const end = afm.match(/^EndCharMetrics/m);
+    if (!start || !end) {
+        throw new Error("Invalid afm file");
     }
+    afm.slice(start.index + start[0].length, end.index)
+        .split('\n')
+        .forEach(metric => {
+            const code = metric.match(/C (\d+)/);
+            const name = metric.match(/N (\w+)/);
+            if (!code || !name) {
+                return;
+            }
+            result[parseInt(code[1])] = name[1];
+        });
     return result;
 }
 
-function readEncodingFile(file: string): string[] {
-    const encoding = fs.readFileSync(findFile(file), 'utf8')
-        .replace(/%.*$/gm, '')
-        .replace(/\s+/g, ' ');
-    const codes = encoding.match(/\/.*\[([^\]]*)\] def/);
-    if (codes == null) {
-        throw new Error("Invalid encoding file");
-    }
-    return codes[1].replace(/[ /]+/g, ' ').trim().split(' ');
-}
-
-const EncodingTable: {[string]: {fonts: string[], map: string[]}} = {
-    "f7b6d320": {fonts: ["cmr", "cmbx", "cmss", "cmssbx", "cmssi"], map: []},
-    "74afc74c": {fonts: ["cmbxti", "cmti"], map: []},
-    "09fbbfac": {fonts: ["cmtt"], map: []},
-    "aae443f0": {fonts: ["cmmi", "cmmib"], map: []},
-    "bbad153f": {fonts: ["cmsy"], map: []},
-    "10037936": {fonts: ["cmbsy"], map: []},
-    "_": {fonts: ["cmex1", "cmex2", "cmex3", "cmex4", "msam", "msbm"], map: []},
-};
-
-for (const enc in EncodingTable) {
-    if (EncodingTable.hasOwnProperty(enc) && enc !== '_') {
-        EncodingTable[enc].map = readEncodingFile(enc + ".enc");
-    }
-}
-
 const GlyphList = readGlyphList();
-const AMSSym = readAMSSym();
+
+const TeXFontTable = {
+    cmr: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/cm/cmr10.afm"),
+    cmbx: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/cm/cmbx10.afm"),
+    cmti: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/cm/cmti10.afm"),
+    cmbxti: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/cm/cmbxti10.afm"),
+    cmmi: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/cm/cmmi10.afm"),
+    cmmib: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/cm/cmmib10.afm"),
+    cmsy: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/cm/cmsy10.afm"),
+    cmex: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/cm/cmex10.afm"),
+    cmbsy: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/cm/cmbsy10.afm"),
+    cmss: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/cm/cmss10.afm"),
+    cmssbx: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/cm/cmssbx10.afm"),
+    cmssi: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/cm/cmssi10.afm"),
+    cmtt: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/cm/cmtt10.afm"),
+    msam: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/symbols/msam10.afm"),
+    msbm: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/symbols/msbm10.afm"),
+    rsfs: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/rsfs/rsfs10.afm"),
+    eufm: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/euler/eufm10.afm"),
+    eufb: readAFM("/usr/share/texlive/texmf-dist/fonts/afm/public/amsfonts/euler/eufb10.afm"),
+};
 
 // Some abbreviations for commonly used strings.
 // This helps minify the code, and also spotting typos using jshint.
@@ -653,12 +650,12 @@ defineSymbol(math, main, rel, "\u21cc", "\\rightleftharpoons", {
 // AMS Negated Binary Relations
 defineSymbol(math, ams, rel, "\u226e", "\\nless", true);
 // Symbol names preceeded by "@" each have a corresponding macro.
-defineSymbol(math, ams, rel, "\ue010", "\\@nleqslant");
-defineSymbol(math, ams, rel, "\ue011", "\\@nleqq");
+defineSymbol(math, ams, rel, "\ue010", "\\@nleqslant", "notlessorslnteql");
+defineSymbol(math, ams, rel, "\ue011", "\\@nleqq", "notlessdblequal");
 defineSymbol(math, ams, rel, "\u2a87", "\\lneq", true);
 defineSymbol(math, ams, rel, "\u2268", "\\lneqq", true);
-defineSymbol(math, ams, rel, "\ue00c", "\\@lvertneqq");
-defineSymbol(math, ams, rel, "\u22e6", "\\lnsim", true);
+defineSymbol(math, ams, rel, "\ue00c", "\\@lvertneqq", "lessornotequal");
+defineSymbol(math, ams, rel, "\u22e6", "\\lnsim", "lessornotsimilar", true);
 defineSymbol(math, ams, rel, "\u2a89", "\\lnapprox", true);
 defineSymbol(math, ams, rel, "\u2280", "\\nprec", true);
 // unicode-math maps \u22e0 to \npreccurlyeq. We'll use the AMS synonym.
@@ -666,23 +663,23 @@ defineSymbol(math, ams, rel, "\u22e0", "\\npreceq", true);
 defineSymbol(math, ams, rel, "\u22e8", "\\precnsim", true);
 defineSymbol(math, ams, rel, "\u2ab9", "\\precnapprox", true);
 defineSymbol(math, ams, rel, "\u2241", "\\nsim", true);
-defineSymbol(math, ams, rel, "\ue006", "\\@nshortmid");
+defineSymbol(math, ams, rel, "\ue006", "\\@nshortmid", "notshortbar");
 defineSymbol(math, ams, rel, "\u2224", "\\nmid", true);
 defineSymbol(math, ams, rel, "\u22ac", "\\nvdash", true);
 defineSymbol(math, ams, rel, "\u22ad", "\\nvDash", true);
 defineSymbol(math, ams, rel, "\u22ea", "\\ntriangleleft");
 defineSymbol(math, ams, rel, "\u22ec", "\\ntrianglelefteq", true);
 defineSymbol(math, ams, rel, "\u228a", "\\subsetneq", true);
-defineSymbol(math, ams, rel, "\ue01a", "\\@varsubsetneq");
+defineSymbol(math, ams, rel, "\ue01a", "\\@varsubsetneq", "notsubsetoreql");
 defineSymbol(math, ams, rel, "\u2acb", "\\subsetneqq", true);
-defineSymbol(math, ams, rel, "\ue017", "\\@varsubsetneqq");
+defineSymbol(math, ams, rel, "\ue017", "\\@varsubsetneqq", "subsetornoteql");
 defineSymbol(math, ams, rel, "\u226f", "\\ngtr", true);
-defineSymbol(math, ams, rel, "\ue00f", "\\@ngeqslant");
-defineSymbol(math, ams, rel, "\ue00e", "\\@ngeqq");
+defineSymbol(math, ams, rel, "\ue00f", "\\@ngeqslant", "notgreaterorslnteql");
+defineSymbol(math, ams, rel, "\ue00e", "\\@ngeqq", "notgreaterdblequal");
 defineSymbol(math, ams, rel, "\u2a88", "\\gneq", true);
 defineSymbol(math, ams, rel, "\u2269", "\\gneqq", true);
-defineSymbol(math, ams, rel, "\ue00d", "\\@gvertneqq");
-defineSymbol(math, ams, rel, "\u22e7", "\\gnsim", true);
+defineSymbol(math, ams, rel, "\ue00d", "\\@gvertneqq", "greaterornotequal");
+defineSymbol(math, ams, rel, "\u22e7", "\\gnsim", "greaterornotsimilar", true);
 defineSymbol(math, ams, rel, "\u2a8a", "\\gnapprox", true);
 defineSymbol(math, ams, rel, "\u2281", "\\nsucc", true);
 // unicode-math maps \u22e1 to \nsucccurlyeq. We'll use the AMS synonym.
@@ -690,21 +687,21 @@ defineSymbol(math, ams, rel, "\u22e1", "\\nsucceq", true);
 defineSymbol(math, ams, rel, "\u22e9", "\\succnsim", true);
 defineSymbol(math, ams, rel, "\u2aba", "\\succnapprox", true);
 // unicode-math maps \u2246 to \simneqq. We'll use the AMS synonym.
-defineSymbol(math, ams, rel, "\u2246", "\\ncong", true);
-defineSymbol(math, ams, rel, "\ue007", "\\@nshortparallel");
+defineSymbol(math, ams, rel, "\u2246", "\\ncong", "notapproxequal", true);
+defineSymbol(math, ams, rel, "\ue007", "\\@nshortparallel", "notshortparallel");
 defineSymbol(math, ams, rel, "\u2226", "\\nparallel", true);
 defineSymbol(math, ams, rel, "\u22af", "\\nVDash", true);
 defineSymbol(math, ams, rel, "\u22eb", "\\ntriangleright");
 defineSymbol(math, ams, rel, "\u22ed", "\\ntrianglerighteq", true);
-defineSymbol(math, ams, rel, "\ue018", "\\@nsupseteqq");
+defineSymbol(math, ams, rel, "\ue018", "\\@nsupseteqq", "notsupersetordbleql");
 defineSymbol(math, ams, rel, "\u228b", "\\supsetneq", true);
-defineSymbol(math, ams, rel, "\ue01b", "\\@varsupsetneq");
+defineSymbol(math, ams, rel, "\ue01b", "\\@varsupsetneq", "notsupersetoreql");
 defineSymbol(math, ams, rel, "\u2acc", "\\supsetneqq", true);
-defineSymbol(math, ams, rel, "\ue019", "\\@varsupsetneqq");
+defineSymbol(math, ams, rel, "\ue019", "\\@varsupsetneqq", "supersetornoteql");
 defineSymbol(math, ams, rel, "\u22ae", "\\nVdash", true);
 defineSymbol(math, ams, rel, "\u2ab5", "\\precneqq", true);
 defineSymbol(math, ams, rel, "\u2ab6", "\\succneqq", true);
-defineSymbol(math, ams, rel, "\ue016", "\\@nsubseteqq");
+defineSymbol(math, ams, rel, "\ue016", "\\@nsubseteqq", "notsubsetordbleql");
 defineSymbol(math, ams, bin, "\u22b4", "\\unlhd");
 defineSymbol(math, ams, bin, "\u22b5", "\\unrhd");
 
@@ -722,7 +719,7 @@ defineSymbol(math, ams, textord, "\u210f", "\\hslash");
 defineSymbol(math, ams, textord, "\u25bd", "\\triangledown");
 defineSymbol(math, ams, textord, "\u25ca", "\\lozenge");
 defineSymbol(math, ams, textord, "\u24c8", "\\circledS");
-defineSymbol(math, ams, textord, "\u00ae", "\\circledR", {msam: 0x72});
+defineSymbol(math, ams, textord, "\u00ae", "\\circledR");
 defineSymbol(text, ams, textord, "\u00ae", "\\circledR");
 defineSymbol(math, ams, textord, "\u2221", "\\measuredangle", true);
 defineSymbol(math, ams, textord, "\u2204", "\\nexists");
@@ -734,36 +731,36 @@ defineSymbol(math, ams, textord, "\u25b2", "\\blacktriangle");
 defineSymbol(math, ams, textord, "\u25bc", "\\blacktriangledown");
 defineSymbol(math, ams, textord, "\u25a0", "\\blacksquare");
 defineSymbol(math, ams, textord, "\u29eb", "\\blacklozenge");
-defineSymbol(math, ams, textord, "\u2605", "\\bigstar");
+defineSymbol(math, ams, textord, "\u2605", "\\bigstar", "star");
 defineSymbol(math, ams, textord, "\u2222", "\\sphericalangle", true);
 defineSymbol(math, ams, textord, "\u2201", "\\complement", true);
 // unicode-math maps U+F0 (ð) to \matheth. We map to AMS function \eth
 defineSymbol(math, ams, textord, "\u00f0", "\\eth", true);
-defineSymbol(math, ams, textord, "\u2571", "\\diagup");
-defineSymbol(math, ams, textord, "\u2572", "\\diagdown");
+defineSymbol(math, ams, textord, "\u2571", "\\diagup", "upslope");
+defineSymbol(math, ams, textord, "\u2572", "\\diagdown", "downslope");
 defineSymbol(math, ams, textord, "\u25a1", "\\square");
 defineSymbol(math, ams, textord, "\u25a1", "\\Box");
 defineSymbol(math, ams, textord, "\u25ca", "\\Diamond");
 // unicode-math maps U+A5 to \mathyen. We map to AMS function \yen
-defineSymbol(math, ams, textord, "\u00a5", "\\yen", {msam: 0x55}, true);
+defineSymbol(math, ams, textord, "\u00a5", "\\yen", true);
 defineSymbol(text, ams, textord, "\u00a5", "\\yen", true);
-defineSymbol(math, ams, textord, "\u2713", "\\checkmark", {msam: 0x58}, true);
+defineSymbol(math, ams, textord, "\u2713", "\\checkmark", true);
 defineSymbol(text, ams, textord, "\u2713", "\\checkmark");
 
 // AMS Hebrew
 defineSymbol(math, ams, textord, "\u2136", "\\beth", true);
 defineSymbol(math, ams, textord, "\u2138", "\\daleth", true);
-defineSymbol(math, ams, textord, "\u2137", "\\gimel", true);
+defineSymbol(math, ams, textord, "\u2137", "\\gimel", "gimel", true);
 
 // AMS Greek
 defineSymbol(math, ams, textord, "\u03dd", "\\digamma", true);
-defineSymbol(math, ams, textord, "\u03f0", "\\varkappa");
+defineSymbol(math, ams, textord, "\u03f0", "\\varkappa", "kappa");
 
 // AMS Delimiters
-defineSymbol(math, ams, open, "\u250c", "\\@ulcorner", {msam: 0x72}, true);
-defineSymbol(math, ams, close, "\u2510", "\\@urcorner", {msam: 0x71}, true);
-defineSymbol(math, ams, open, "\u2514", "\\@llcorner", {msam: 0x78}, true);
-defineSymbol(math, ams, close, "\u2518", "\\@lrcorner", {msam: 0x79}, true);
+defineSymbol(math, ams, open, "\u250c", "\\@ulcorner", "rightanglenw", true);
+defineSymbol(math, ams, close, "\u2510", "\\@urcorner", "rightanglene", true);
+defineSymbol(math, ams, open, "\u2514", "\\@llcorner", "rightanglesw", true);
+defineSymbol(math, ams, close, "\u2518", "\\@lrcorner", "rightanglese", true);
 
 // AMS Binary Relations
 defineSymbol(math, ams, rel, "\u2266", "\\leqq", true);
@@ -773,7 +770,7 @@ defineSymbol(math, ams, rel, "\u2272", "\\lesssim", true);
 defineSymbol(math, ams, rel, "\u2a85", "\\lessapprox", true);
 defineSymbol(math, ams, rel, "\u224a", "\\approxeq", true);
 defineSymbol(math, ams, bin, "\u22d6", "\\lessdot");
-defineSymbol(math, ams, rel, "\u22d8", "\\lll", true);
+defineSymbol(math, ams, rel, "\u22d8", "\\lll", "muchless", true);
 defineSymbol(math, ams, rel, "\u2276", "\\lessgtr", true);
 defineSymbol(math, ams, rel, "\u22da", "\\lesseqgtr", true);
 defineSymbol(math, ams, rel, "\u2a8b", "\\lesseqqgtr", true);
@@ -788,13 +785,13 @@ defineSymbol(math, ams, rel, "\u228f", "\\sqsubset", true);
 defineSymbol(math, ams, rel, "\u227c", "\\preccurlyeq", true);
 defineSymbol(math, ams, rel, "\u22de", "\\curlyeqprec", true);
 defineSymbol(math, ams, rel, "\u227e", "\\precsim", true);
-defineSymbol(math, ams, rel, "\u2ab7", "\\precapprox", true);
-defineSymbol(math, ams, rel, "\u22b2", "\\vartriangleleft");
+defineSymbol(math, ams, rel, "\u2ab7", "\\precapprox", "precedesorequal", true);
+defineSymbol(math, ams, rel, "\u22b2", "\\vartriangleleft", "triangleleft");
 defineSymbol(math, ams, rel, "\u22b4", "\\trianglelefteq");
 defineSymbol(math, ams, rel, "\u22a8", "\\vDash", true);
 defineSymbol(math, ams, rel, "\u22aa", "\\Vvdash", true);
-defineSymbol(math, ams, rel, "\u2323", "\\smallsmile");
-defineSymbol(math, ams, rel, "\u2322", "\\smallfrown");
+defineSymbol(math, ams, rel, "\u2323", "\\smallsmile", {msam: "smile"});
+defineSymbol(math, ams, rel, "\u2322", "\\smallfrown", {msam: "frown"});
 defineSymbol(math, ams, rel, "\u224f", "\\bumpeq", true);
 defineSymbol(math, ams, rel, "\u224e", "\\Bumpeq", true);
 defineSymbol(math, ams, rel, "\u2267", "\\geqq", true);
@@ -803,12 +800,12 @@ defineSymbol(math, ams, rel, "\u2a96", "\\eqslantgtr", true);
 defineSymbol(math, ams, rel, "\u2273", "\\gtrsim", true);
 defineSymbol(math, ams, rel, "\u2a86", "\\gtrapprox", true);
 defineSymbol(math, ams, bin, "\u22d7", "\\gtrdot");
-defineSymbol(math, ams, rel, "\u22d9", "\\ggg", true);
+defineSymbol(math, ams, rel, "\u22d9", "\\ggg", "muchgreater", true);
 defineSymbol(math, ams, rel, "\u2277", "\\gtrless", true);
 defineSymbol(math, ams, rel, "\u22db", "\\gtreqless", true);
 defineSymbol(math, ams, rel, "\u2a8c", "\\gtreqqless", true);
 defineSymbol(math, ams, rel, "\u2256", "\\eqcirc", true);
-defineSymbol(math, ams, rel, "\u2257", "\\circeq", true);
+defineSymbol(math, ams, rel, "\u2257", "\\circeq", "circleequal", true);
 defineSymbol(math, ams, rel, "\u225c", "\\triangleq", true);
 defineSymbol(math, ams, rel, "\u223c", "\\thicksim");
 defineSymbol(math, ams, rel, "\u2248", "\\thickapprox");
@@ -818,12 +815,12 @@ defineSymbol(math, ams, rel, "\u2290", "\\sqsupset", true);
 defineSymbol(math, ams, rel, "\u227d", "\\succcurlyeq", true);
 defineSymbol(math, ams, rel, "\u22df", "\\curlyeqsucc", true);
 defineSymbol(math, ams, rel, "\u227f", "\\succsim", true);
-defineSymbol(math, ams, rel, "\u2ab8", "\\succapprox", true);
-defineSymbol(math, ams, rel, "\u22b3", "\\vartriangleright");
+defineSymbol(math, ams, rel, "\u2ab8", "\\succapprox", "followsorequal", true);
+defineSymbol(math, ams, rel, "\u22b3", "\\vartriangleright", "triangleright");
 defineSymbol(math, ams, rel, "\u22b5", "\\trianglerighteq");
 defineSymbol(math, ams, rel, "\u22a9", "\\Vdash", true);
-defineSymbol(math, ams, rel, "\u2223", "\\shortmid");
-defineSymbol(math, ams, rel, "\u2225", "\\shortparallel");
+defineSymbol(math, ams, rel, "\u2223", "\\shortmid", {msbm: "barshort"});
+defineSymbol(math, ams, rel, "\u2225", "\\shortparallel", {msbm: "parallelshort"});
 defineSymbol(math, ams, rel, "\u226c", "\\between", true);
 defineSymbol(math, ams, rel, "\u22d4", "\\pitchfork", true);
 defineSymbol(math, ams, rel, "\u221d", "\\varpropto");
@@ -831,7 +828,7 @@ defineSymbol(math, ams, rel, "\u25c0", "\\blacktriangleleft");
 // unicode-math says that \therefore is a mathord atom.
 // We kept the amssymb atom type, which is rel.
 defineSymbol(math, ams, rel, "\u2234", "\\therefore", true);
-defineSymbol(math, ams, rel, "\u220d", "\\backepsilon");
+defineSymbol(math, ams, rel, "\u220d", "\\backepsilon", "epsiloninv");
 defineSymbol(math, ams, rel, "\u25b6", "\\blacktriangleright");
 // unicode-math says that \because is a mathord atom.
 // We kept the amssymb atom type, which is rel.
@@ -846,7 +843,7 @@ defineSymbol(math, ams, rel, "\u2251", "\\Doteq", true);
 
 // AMS Binary Operators
 defineSymbol(math, ams, bin, "\u2214", "\\dotplus", true);
-defineSymbol(math, ams, bin, "\u2216", "\\smallsetminus");
+defineSymbol(math, ams, bin, "\u2216", "\\smallsetminus", {msbm: "integerdivide"});
 defineSymbol(math, ams, bin, "\u22d2", "\\Cap", true);
 defineSymbol(math, ams, bin, "\u22d3", "\\Cup", true);
 defineSymbol(math, ams, bin, "\u2a5e", "\\doublebarwedge", true);
@@ -859,9 +856,9 @@ defineSymbol(math, ams, bin, "\u22cb", "\\leftthreetimes", true);
 defineSymbol(math, ams, bin, "\u22cc", "\\rightthreetimes", true);
 defineSymbol(math, ams, bin, "\u22cf", "\\curlywedge", true);
 defineSymbol(math, ams, bin, "\u22ce", "\\curlyvee", true);
-defineSymbol(math, ams, bin, "\u229d", "\\circleddash", true);
+defineSymbol(math, ams, bin, "\u229d", "\\circleddash", "circleminus", true);
 defineSymbol(math, ams, bin, "\u229b", "\\circledast", true);
-defineSymbol(math, ams, bin, "\u22c5", "\\centerdot");
+defineSymbol(math, ams, bin, "\u22c5", "\\centerdot", {msam: "squaresmallsolid"});
 defineSymbol(math, ams, bin, "\u22ba", "\\intercal", true);
 defineSymbol(math, ams, bin, "\u22d2", "\\doublecap");
 defineSymbol(math, ams, bin, "\u22d3", "\\doublecup");
@@ -892,7 +889,7 @@ defineSymbol(math, ams, rel, "\u21e0", "\\dashleftarrow", {
         'SetRBearing(834,1)',
     ],
 }, true);
-defineSymbol(math, ams, rel, "\u21c7", "\\leftleftarrows", true);
+defineSymbol(math, ams, rel, "\u21c7", "\\leftleftarrows", "dblarrowleft", true);
 defineSymbol(math, ams, rel, "\u21c6", "\\leftrightarrows", true);
 defineSymbol(math, ams, rel, "\u21da", "\\Lleftarrow", true);
 defineSymbol(math, ams, rel, "\u219e", "\\twoheadleftarrow", true);
@@ -908,7 +905,7 @@ defineSymbol(math, ams, rel, "\u21bf", "\\upharpoonleft", true);
 defineSymbol(math, ams, rel, "\u21c3", "\\downharpoonleft", true);
 defineSymbol(math, ams, rel, "\u22b8", "\\multimap", true);
 defineSymbol(math, ams, rel, "\u21ad", "\\leftrightsquigarrow", true);
-defineSymbol(math, ams, rel, "\u21c9", "\\rightrightarrows", true);
+defineSymbol(math, ams, rel, "\u21c9", "\\rightrightarrows", "dblarrowright", true);
 defineSymbol(math, ams, rel, "\u21c4", "\\rightleftarrows", true);
 defineSymbol(math, ams, rel, "\u21a0", "\\twoheadrightarrow", true);
 defineSymbol(math, ams, rel, "\u21a3", "\\rightarrowtail", true);
@@ -1047,51 +1044,17 @@ defineSymbol(math, main, bin, "\u2228", "\\vee", true);
 defineSymbol(math, main, textord, "\u221a", "\\surd", {
     cmsy: [, 0, 760],
     cmbsy: [, 0, 760],
-    cmex1: [0x70],
-    cmex2: [0x71],
-    cmex3: [0x72],
-    cmex4: [0x73],
 });
-defineSymbol(math, main, open, "(", "(", {
-    cmex1: [0x00],
-    cmex2: [0x10],
-    cmex3: [0x12],
-    cmex4: [0x20],
-});
-defineSymbol(math, main, open, "[", "[", {
-    cmex1: [0x02],
-    cmex2: [0x68],
-    cmex3: [0x14],
-    cmex4: [0x22],
-});
-defineSymbol(math, main, open, "\u27e8", "\\langle", {
-    cmex1: [0x0A],
-    cmex2: [0x44],
-    cmex3: [0x1C],
-    cmex4: [0x2A],
-}, true);
+defineSymbol(math, main, open, "(", "(");
+defineSymbol(math, main, open, "[", "[");
+defineSymbol(math, main, open, "\u27e8", "\\langle", true);
 defineSymbol(math, main, open, "\u2223", "\\lvert");
 defineSymbol(math, main, open, "\u2225", "\\lVert");
-defineSymbol(math, main, close, ")", ")", {
-    cmex1: [0x01],
-    cmex2: [0x11],
-    cmex3: [0x13],
-    cmex4: [0x21],
-});
-defineSymbol(math, main, close, "]", "]", {
-    cmex1: [0x03],
-    cmex2: [0x69],
-    cmex3: [0x15],
-    cmex4: [0x23],
-});
+defineSymbol(math, main, close, ")", ")");
+defineSymbol(math, main, close, "]", "]");
 defineSymbol(math, main, close, "?", "?");
 defineSymbol(math, main, close, "!", "!");
-defineSymbol(math, main, close, "\u27e9", "\\rangle", {
-    cmex1: [0x0B],
-    cmex2: [0x45],
-    cmex3: [0x1D],
-    cmex4: [0x2B],
-}, true);
+defineSymbol(math, main, close, "\u27e9", "\\rangle", true);
 defineSymbol(math, main, close, "\u2223", "\\rvert");
 defineSymbol(math, main, close, "\u2225", "\\rVert");
 defineSymbol(math, main, rel, "=", "=");
@@ -1122,7 +1085,11 @@ defineSymbol(math, main, rel, "\u2265", "\\geq", true);
 defineSymbol(math, main, rel, "\u2190", "\\gets");
 defineSymbol(math, main, rel, ">", "\\gt");
 defineSymbol(math, main, rel, "\u2208", "\\in", true);
-defineSymbol(math, main, rel, "\ue020", "\\@not", "negationslash");
+defineSymbol(math, main, rel, "\ue020", "\\@not", {
+    name: "negationslash",
+    cmr: [,,, 778],
+    cmbx: [,,, 894],
+});
 defineSymbol(math, main, rel, "\u2282", "\\subset", true);
 defineSymbol(math, main, rel, "\u2283", "\\supset", true);
 defineSymbol(math, main, rel, "\u2286", "\\subseteq", true);
@@ -1186,20 +1153,10 @@ defineSymbol(math, main, bin, "\u22c4", "\\diamond");
 defineSymbol(math, main, bin, "\u22c6", "\\star");
 defineSymbol(math, main, bin, "\u25c3", "\\triangleleft", "triangleleft");
 defineSymbol(math, main, bin, "\u25b9", "\\triangleright", "triangleright");
-defineSymbol(math, main, open, "{", "\\{", {
-    cmex1: [0x08],
-    cmex2: [0x6E],
-    cmex3: [0x1A],
-    cmex4: [0x28],
-});
+defineSymbol(math, main, open, "{", "\\{");
 defineSymbol(text, main, textord, "{", "\\{");
 defineSymbol(text, main, textord, "{", "\\textbraceleft");
-defineSymbol(math, main, close, "}", "\\}", {
-    cmex1: [0x09],
-    cmex2: [0x6F],
-    cmex3: [0x1B],
-    cmex4: [0x29],
-});
+defineSymbol(math, main, close, "}", "\\}");
 defineSymbol(text, main, textord, "}", "\\}");
 defineSymbol(text, main, textord, "}", "\\textbraceright");
 defineSymbol(math, main, open, "{", "\\lbrace");
@@ -1212,44 +1169,19 @@ defineSymbol(math, main, open, "(", "\\lparen");
 defineSymbol(math, main, close, ")", "\\rparen");
 defineSymbol(text, main, textord, "<", "\\textless"); // in T1 fontenc
 defineSymbol(text, main, textord, ">", "\\textgreater"); // in T1 fontenc
-defineSymbol(math, main, open, "\u230a", "\\lfloor", {
-    cmex1: [0x04],
-    cmex2: [0x6A],
-    cmex3: [0x16],
-    cmex4: [0x24],
-}, true);
-defineSymbol(math, main, close, "\u230b", "\\rfloor", {
-    cmex1: [0x05],
-    cmex2: [0x6B],
-    cmex3: [0x17],
-    cmex4: [0x25],
-}, true);
-defineSymbol(math, main, open, "\u2308", "\\lceil", {
-    cmex1: [0x06],
-    cmex2: [0x6C],
-    cmex3: [0x18],
-    cmex4: [0x26],
-}, true);
-defineSymbol(math, main, close, "\u2309", "\\rceil", {
-    cmex1: [0x07],
-    cmex2: [0x6D],
-    cmex3: [0x19],
-    cmex4: [0x27],
-}, true);
-defineSymbol(math, main, textord, "\\", "\\backslash", {
-    cmex1: [0x0F],
-    cmex2: [0x2F],
-    cmex3: [0x1F],
-    cmex4: [0x2D],
-});
+defineSymbol(math, main, open, "\u230a", "\\lfloor", true);
+defineSymbol(math, main, close, "\u230b", "\\rfloor", true);
+defineSymbol(math, main, open, "\u2308", "\\lceil", true);
+defineSymbol(math, main, close, "\u2309", "\\rceil", true);
+defineSymbol(math, main, textord, "\\", "\\backslash");
 defineSymbol(math, main, textord, "\u2223", "|", {
     name: "bar",
-    cmex1: [0x0C],
+    cmex: ["vextendsingle", 0, 606],
 });
 defineSymbol(math, main, textord, "\u2223", "\\vert");
 defineSymbol(text, main, textord, "|", "\\textbar"); // in T1 fontenc
 defineSymbol(math, main, textord, "\u2225", "\\|", {
-    cmex1: [0x0D],
+    cmex: ["vextenddouble", 0, 606],
 });
 defineSymbol(math, main, textord, "\u2225", "\\Vert");
 defineSymbol(text, main, textord, "\u2225", "\\textbardbl");
@@ -1268,48 +1200,31 @@ defineSymbol(text, main, textord, "\\", "\\textbackslash");
 defineSymbol(text, main, textord, "^", "\\textasciicircum", {
     name: "circumflex",
     cmtt: "asciicircum",
+    eufm: "asciicircum",
+    eufb: "asciicircum",
 });
 defineSymbol(math, main, rel, "\u2191", "\\uparrow", {
-    cmex1: [0x78],
+    cmex: ["arrowtp", 0, 600],
 }, true);
 defineSymbol(math, main, rel, "\u21d1", "\\Uparrow", {
-    cmex1: [0x7E],
+    cmex: ["arrowdbltp", 0, 600],
 }, true);
 defineSymbol(math, main, rel, "\u2193", "\\downarrow", {
-    cmex1: [0x79],
+    cmex: ["arrowbt", 0, 600],
 }, true);
 defineSymbol(math, main, rel, "\u21d3", "\\Downarrow", {
-    cmex1: [0x7F],
+    cmex: ["arrowdblbt", 0, 600],
 }, true);
 defineSymbol(math, main, rel, "\u2195", "\\updownarrow", true);
 defineSymbol(math, main, rel, "\u21d5", "\\Updownarrow", true);
-defineSymbol(math, main, op, "\u2210", "\\coprod", {
-    cmex1: [0x60],
-    cmex2: [0x61],
-});
-defineSymbol(math, main, op, "\u22c1", "\\bigvee", {
-    cmex1: [0x57],
-    cmex2: [0x5F],
-});
-defineSymbol(math, main, op, "\u22c0", "\\bigwedge", {
-    cmex1: [0x56],
-    cmex2: [0x5E],
-});
-defineSymbol(math, main, op, "\u2a04", "\\biguplus", {
-    cmex1: [0x55],
-    cmex2: [0x5D],
-});
-defineSymbol(math, main, op, "\u22c2", "\\bigcap", {
-    cmex1: [0x54],
-    cmex2: [0x5C],
-});
-defineSymbol(math, main, op, "\u22c3", "\\bigcup", {
-    cmex1: [0x53],
-    cmex2: [0x5B],
-});
+defineSymbol(math, main, op, "\u2210", "\\coprod", {cmex: "coproduct"});
+defineSymbol(math, main, op, "\u22c1", "\\bigvee", {cmex: "logicalor"});
+defineSymbol(math, main, op, "\u22c0", "\\bigwedge", {cmex: "logicaland"});
+defineSymbol(math, main, op, "\u2a04", "\\biguplus", {cmex: "unionmulti"});
+defineSymbol(math, main, op, "\u22c2", "\\bigcap", {cmex: "intersection"});
+defineSymbol(math, main, op, "\u22c3", "\\bigcup", {cmex: "union"});
 defineSymbol(math, main, op, "\u222b", "\\int", {
-    cmex1: [0x52],
-    cmex2: [0x5A],
+    cmex: [, 0, 805, 0, 1360],
 });
 defineSymbol(math, main, op, "\u222b", "\\intop");
 defineSymbol(math, main, op, "\u222c", "\\iint", {
@@ -1342,36 +1257,17 @@ defineSymbol(math, main, op, "\u222d", "\\iiint", {
         'SetRBearing(1036,1)',
     ],
 });
-defineSymbol(math, main, op, "\u220f", "\\prod", {
-    cmex1: [0x51],
-    cmex2: [0x59],
-});
-defineSymbol(math, main, op, "\u2211", "\\sum", {
-    cmex1: [0x50],
-    cmex2: [0x58],
-});
-defineSymbol(math, main, op, "\u2a02", "\\bigotimes", {
-    cmex1: [0x4E],
-    cmex2: [0x4F],
-});
-defineSymbol(math, main, op, "\u2a01", "\\bigoplus", {
-    cmex1: [0x4C],
-    cmex2: [0x4D],
-});
-defineSymbol(math, main, op, "\u2a00", "\\bigodot", {
-    cmex1: [0x4A],
-    cmex2: [0x4B],
-});
+defineSymbol(math, main, op, "\u220f", "\\prod");
+defineSymbol(math, main, op, "\u2211", "\\sum");
+defineSymbol(math, main, op, "\u2a02", "\\bigotimes", {cmex: "circlemultiply"});
+defineSymbol(math, main, op, "\u2a01", "\\bigoplus", {cmex: "circleplus"});
+defineSymbol(math, main, op, "\u2a00", "\\bigodot", {cmex: "circledot"});
 defineSymbol(math, main, op, "\u222e", "\\oint", {
-    cmex1: [0x48],
-    cmex2: [0x49],
+    cmex: ["contintegral", 0, 805, 0, 1360],
 });
 defineSymbol(math, main, op, "\u222f", "\\oiint");
 defineSymbol(math, main, op, "\u2230", "\\oiiint");
-defineSymbol(math, main, op, "\u2a06", "\\bigsqcup", {
-    cmex1: [0x46],
-    cmex2: [0x47],
-});
+defineSymbol(math, main, op, "\u2a06", "\\bigsqcup", {cmex: "unionsq"});
 defineSymbol(math, main, op, "\u222b", "\\smallint");
 defineSymbol(text, main, inner, "\u2026", "\\textellipsis");
 defineSymbol(math, main, inner, "\u2026", "\\mathellipsis");
@@ -1473,14 +1369,11 @@ defineSymbol(text, main, textord, "\u00d8", "\\O", true);
 defineSymbol(text, main, accent, "\u02ca", "\\'"); // acute
 defineSymbol(text, main, accent, "\u02cb", "\\`"); // grave
 defineSymbol(text, main, accent, "\u02c6", "\\^", {
-    cmex1: [0x62],
-    cmex2: [0x63],
-    cmex3: [0x64],
+    msbm: "hatwide",
+    cmex: "hat",
 }); // circumflex
 defineSymbol(text, main, accent, "\u02dc", "\\~", {
-    cmex1: [0x65],
-    cmex2: [0x66],
-    cmex3: [0x67],
+    msbm: "tildewide",
 }); // tilde
 defineSymbol(text, main, accent, "\u02c9", "\\="); // macron
 defineSymbol(text, main, accent, "\u02d8", "\\u"); // breve
@@ -1531,7 +1424,7 @@ defineSymbol(math, main, mathord, "\u00a3", "\\pounds");
 defineSymbol(math, main, mathord, "\u00a3", "\\mathsterling", true);
 defineSymbol(text, main, mathord, "\u00a3", "\\pounds");
 defineSymbol(text, main, mathord, "\u00a3", "\\textsterling", true);
-defineSymbol(math, ams, textord, "\u2720", "\\maltese", {msam: 0x7A});
+defineSymbol(math, ams, textord, "\u2720", "\\maltese");
 defineSymbol(text, ams, textord, "\u2720", "\\maltese");
 
 defineSymbol(text, main, spacing, "\u00a0", "\\ ");
@@ -1539,13 +1432,12 @@ defineSymbol(text, main, spacing, "\u00a0", " ");
 defineSymbol(text, main, spacing, "\u00a0", "~");
 
 defineSymbol(math, main, textord, ".", ".");
-defineSymbol(math, main, textord, "/", "/", {
-    cmex1: [0x0E],
-    cmex2: [0x2E],
-    cmex3: [0x1E],
-    cmex4: [0x2C],
+defineSymbol(math, main, textord, "/", "/");
+defineSymbol(math, main, textord, '"', '"', {
+    name: "quotedblright",
+    eufm: "quotedbl",
+    eufb: "quotedbl",
 });
-defineSymbol(math, main, textord, '"', '"', "quotedblright");
 defineSymbol(math, main, textord, "@", "@");
 defineSymbol(text, main, textord, "*", "*");
 
@@ -1558,9 +1450,14 @@ for (let i = 0; i < textSymbols.length; i++) {
 }
 
 // Numerals are textords in both modes
+const numerals = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven',
+    'eight', 'nine'];
 for (let i = 0; i < 10; i++) {
     const ch = i.toString();
-    defineSymbol(math, main, textord, ch, ch);
+    defineSymbol(math, main, textord, ch, ch, {
+        cmmi: numerals[i] + "oldstyle",
+        cmmib: numerals[i] + "oldstyle",
+    });
     defineSymbol(text, main, textord, ch, ch);
 }
 
@@ -1573,19 +1470,19 @@ for (let i = 0; i < letters.length; i++) {
 }
 
 // Blackboard bold and script letters in Unicode range
-defineSymbol(math, ams, textord, "C", "\u2102", {msbm: 0x43});  // blackboard bold
+defineSymbol(math, ams, textord, "C", "\u2102");  // blackboard bold
 defineSymbol(text, ams, textord, "C", "\u2102");
-defineSymbol(math, ams, textord, "H", "\u210D", {msbm: 0x48});
+defineSymbol(math, ams, textord, "H", "\u210D");
 defineSymbol(text, ams, textord, "H", "\u210D");
-defineSymbol(math, ams, textord, "N", "\u2115", {msbm: 0x4E});
+defineSymbol(math, ams, textord, "N", "\u2115");
 defineSymbol(text, ams, textord, "N", "\u2115");
-defineSymbol(math, ams, textord, "P", "\u2119", {msbm: 0x50});
+defineSymbol(math, ams, textord, "P", "\u2119");
 defineSymbol(text, ams, textord, "P", "\u2119");
-defineSymbol(math, ams, textord, "Q", "\u211A", {msbm: 0x51});
+defineSymbol(math, ams, textord, "Q", "\u211A");
 defineSymbol(text, ams, textord, "Q", "\u211A");
-defineSymbol(math, ams, textord, "R", "\u211D", {msbm: 0x52});
+defineSymbol(math, ams, textord, "R", "\u211D");
 defineSymbol(text, ams, textord, "R", "\u211D");
-defineSymbol(math, ams, textord, "Z", "\u2124", {msbm: 0x5A});
+defineSymbol(math, ams, textord, "Z", "\u2124");
 defineSymbol(text, ams, textord, "Z", "\u2124");
 defineSymbol(math, main, mathord, "h", "\u210E");  // italic h, Planck constant
 defineSymbol(text, main, mathord, "h", "\u210E");
@@ -1694,6 +1591,72 @@ defineSymbol(text, main, textord, "\u2019", "’");
 defineSymbol(text, main, textord, "\u201c", "“");
 defineSymbol(text, main, textord, "\u201d", "”");
 
+// defineGlyph("\u0302", {
+//     msbm: ["hatwide", -1889, 0],
+//     msbm: ["hatwider", -2333, 0],
+//     cmex: ["hat", -556, 0, -1000, 0, -1444, 0],
+// });
+// defineGlyph("\u0303", {
+//     msbm: ["tildewide", -1889, 0],
+//     msbm: ["tildewider", -2333, 0],
+//     cmex: ["tilde", -556, 0, -1000, 0, -1444, 0],
+// });
+// defineGlyph("\u23d0", {cmex: ["arrowvertex", 0, 601]});
+// defineGlyph("\u2016", {cmex: ["arrowvertexdbl", 0, 601]});
+// defineGlyph("\u239b", {cmex: ["parenlefttp", 0, 1115]});
+// defineGlyph("\u239e", {cmex: ["parenrighttp", 0, 1115]});
+// defineGlyph("\u23a1", {cmex: ["bracketlefttp", 0, 1115]});
+// defineGlyph("\u23a4", {cmex: ["bracketrighttp", 0, 1115]});
+// defineGlyph("\u23a3", {cmex: ["bracketleftbt", 0, 1115]});
+// defineGlyph("\u23a6", {cmex: ["bracketrightbt", 0, 1115]});
+// defineGlyph("\u23a2", {cmex: ["bracketleftex", 0, 601]});
+// defineGlyph("\u23a5", {cmex: ["bracketrightex", 0, 601]});
+// defineGlyph("\u23a7", {cmex: ["bracelefttp", 0, 900]});
+// defineGlyph("\u23ab", {cmex: ["bracerighttp", 0, 900]});
+// defineGlyph("\u23a9", {cmex: "braceleftbt"});
+// defineGlyph("\u23ad", {cmex: "bracerightbt"});
+// defineGlyph("\u23a8", {cmex: ["braceleftmid", 0, 1115]});
+// defineGlyph("\u23ac", {cmex: ["bracerightmid", 0, 1115]});
+// defineGlyph("\u23aa", {cmex: ["braceex", 0, 300]});
+// defineGlyph("\u239d", {cmex: ["parenleftbt", 0, 1115]});
+// defineGlyph("\u23a0", {cmex: ["parenrightbt", 0, 1115]});
+// defineGlyph("\u239c", {cmex: ["parenleftex", 0, 600]});
+// defineGlyph("\u239f", {cmex: ["parenrightex", 0, 600]});
+// defineGlyph("\u23b7", {cmex: ["radicalbt", 0, 915]});
+// defineGlyph("\ue000", {cmex: ["radicalvertex", 0, 605]});
+// defineGlyph("\ue001", {cmex: ["radicaltp", 0, 565]});
+// defineGlyph("\ue150", {cmex: "bracehtipdownleft"});
+// defineGlyph("\ue151", {cmex: "bracehtipdownright"});
+// defineGlyph("\ue152", {cmex: "bracehtipupleft"});
+// defineGlyph("\ue153", {cmex: "bracehtipupright"});
+// defineGlyph("\ue153", {'Size4': [ // braceext
+//     'Open("lib/Extra.otf")',
+//     'Select(0u5F)', 'Copy()',
+//     'Open("otf/KaTeX_Size4-Regular.otf")',
+//     'Select(0uE154)', 'Paste()',
+// ]});
+
+const CMEX_SIZES = [
+    {
+        big: [0, 810],
+        Big: [0, 1110],
+        bigg: [0, 1410],
+        Bigg: [0, 1710],
+    },
+    {
+        text: [0, 750],
+        display: [0, 950],
+    },
+    {
+        wide: null,
+        wider: null,
+        widest: null,
+    },
+    {
+        '': null,
+    },
+];
+
 const FontTable = {
     "Main-Regular": {cmr: [], cmmi: [], cmsy: [], extra: []},
     "Main-Bold": {cmbx: [], cmmib: [], cmbsy: [], extra: []},
@@ -1718,23 +1681,22 @@ const FontTable = {
 };
 
 function findGlyphName(names: ?number | string | string[]): string {
-    if (typeof names === "number") {
-        names = GlyphList[names];
-    } else if (typeof names === "string") {
-        names = [names];
-    }
     if (names == null) {
         return "";
+    } else if (typeof names === "string") {
+        return names;
+    } else if (typeof names === "number") {
+        names = GlyphList[names];
     }
     for (let i = 0; i < names.length; i++) {
-        for (const enc in EncodingTable) {
-            if (EncodingTable.hasOwnProperty(enc) &&
-                    EncodingTable[enc].map.indexOf(names[i]) >= 0) {
+        for (const tf in TeXFontTable) {
+            if (TeXFontTable[tf].indexOf(names[i]) >= 0) {
                 return names[i];
             }
         }
     }
-    return "";
+    console.warn(`Using ${names[0]}`);
+    return names[0];
 }
 
 GlyphTable.forEach((val, ch) => {
@@ -1752,34 +1714,49 @@ GlyphTable.forEach((val, ch) => {
     }
     const name = findGlyphName(val);
 
-    for (const enc in EncodingTable) {
-        if (EncodingTable.hasOwnProperty(enc)) {
-            const index = EncodingTable[enc].map.indexOf(name);
-            EncodingTable[enc].fonts.forEach(tf => {
-                let idx = index;
-                let prop = property && property[tf];
-                if (Array.isArray(prop)) {
-                    if (prop[0] != null) {
-                        idx = prop[0];
-                    }
-                    prop = prop.slice(1);
-                } else if (prop != null) {
-                    idx = prop;
-                    prop = null;
+    for (const tf in TeXFontTable) {
+        if (TeXFontTable.hasOwnProperty(tf)) {
+            let nm = name;
+            let prop = property && property[tf];
+            if (Array.isArray(prop)) {
+                if (prop[0] != null) {
+                    nm = prop[0];
                 }
-                if (typeof idx === "string") {
-                    idx = EncodingTable[enc].map.indexOf(idx);
+                prop = prop.slice(1);
+            } else if (prop != null) {
+                nm = prop;
+                prop = null;
+            }
+
+            if (tf === "cmex") {
+                const size = CMEX_SIZES.find(size => TeXFontTable[tf]
+                    .indexOf(nm + Object.keys(size)[0]) >= 0);
+                if (size != null) {
+                    found = true;
+                    Object.keys(size).forEach((s, i) => {
+                        const idx = TeXFontTable[tf].indexOf(nm + s);
+                        if (idx !== -1) {
+                            const p = Array.isArray(prop)
+                                // $FlowFixMe
+                                ? prop.slice(2 * i, 2 * i + 2) : size[s];
+                            FontTable["Size" + (i + 1)][tf + (i + 1)][ch] =
+                                p && p.length ? {idx, prop: p} : idx;
+                        }
+                    });
                 }
-                if (idx === -1) {
-                    return;
+                continue;
+            }
+
+            const idx = TeXFontTable[tf].indexOf(nm);
+            if (idx === -1) {
+                continue;
+            }
+            for (const f in FontTable) {
+                if (FontTable[f][tf]) {
+                    found = true;
+                    FontTable[f][tf][ch] = prop ? {idx, prop} : idx;
                 }
-                for (const f in FontTable) {
-                    if (FontTable.hasOwnProperty(f) && FontTable[f][tf]) {
-                        found = true;
-                        FontTable[f][tf][ch] = prop ? {idx, prop} : idx;
-                    }
-                }
-            });
+            }
         }
     }
     if (!found) {
@@ -1787,4 +1764,25 @@ GlyphTable.forEach((val, ch) => {
     }
 });
 
-console.log(FontTable);
+FontTable["Main-Regular"].extra.push([
+    'Select(0u2002)', 'SetRBearing(500)', // spaceEn
+    'Select(0u2003)', 'SetRBearing(999)', // spaceEm
+    'Select(0u2004)', 'SetRBearing(333)', // space3
+    'Select(0u2005)', 'SetRBearing(250)', // space4
+    'Select(0u2006)', 'SetRBearing(167)', // space6
+    'Select(0u2009)', 'SetRBearing(167)', // thinspace
+    'Select(0u200A)', 'SetRBearing(83)', // hairspace
+]);
+FontTable["Main-Bold"].extra.push([
+    'Select(0u2002)', 'SetRBearing(500)', // spaceEn
+    'Select(0u2003)', 'SetRBearing(999)', // spaceEm
+    'Select(0u2004)', 'SetRBearing(333)', // space3
+    'Select(0u2005)', 'SetRBearing(250)', // space4
+    'Select(0u2006)', 'SetRBearing(167)', // space6
+    'Select(0u2009)', 'SetRBearing(167)', // thinspace
+    'Select(0u200A)', 'SetRBearing(83)', // hairspace
+]);
+FontTable["Typewriter"].extra.push([
+    'Select(0u20)', 'SetRBearing(525)', // space
+    'Select(0uA0)', 'SetRBearing(525)', // nbspace
+]);
