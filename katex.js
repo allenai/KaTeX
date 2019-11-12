@@ -22,6 +22,7 @@ import {
     PathNode,
     LineNode,
 } from "./src/domTree";
+import {nodeCreationCounter} from "./src/defineFunction";
 
 import type {SettingsOptions} from "./src/Settings";
 import type {AnyParseNode} from "./src/parseNode";
@@ -67,6 +68,7 @@ const renderToString = function(
     expression: string,
     options: SettingsOptions,
 ): string {
+    nodeCreationCounter.count = 0;
     const markup = renderToDomTree(expression, options).toMarkup();
     return markup;
 };

@@ -203,7 +203,9 @@ export default function defineFunction<NODETYPE: NodeType>({
     }
 }
 
-let nodeCreationCounter = 0;
+export const nodeCreationCounter = {
+    count: 0,
+};
 
 /**
  * Use this to register only the HTML and MathML builders for a function (e.g.
@@ -231,8 +233,9 @@ export function defineFunctionBuilders<NODETYPE: NodeType>({
                     mathNode.setAttribute("s2:start", group.loc.start);
                     mathNode.setAttribute("s2:end", group.loc.end);
                 }
-                mathNode.setAttribute("s2:index", String(nodeCreationCounter));
-                nodeCreationCounter += 1;
+                const nodeIndex = String(nodeCreationCounter.count);
+                mathNode.setAttribute("s2:index", nodeIndex);
+                nodeCreationCounter.count += 1;
             }
         }
         return node;
