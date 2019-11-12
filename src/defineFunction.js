@@ -8,7 +8,7 @@ import type Options from "./Options";
 import type {ArgType, BreakToken} from "./types";
 import type {HtmlDomNode} from "./domTree";
 import type {Token} from "./Token";
-import type {MathDomNode} from "./mathMLTree";
+import type {MathDomNode, MathNode} from "./mathMLTree";
 
 /** Context provided to function handlers for error messages. */
 export type FunctionContext = {|
@@ -203,6 +203,8 @@ export default function defineFunction<NODETYPE: NodeType>({
     }
 }
 
+let nodeCreationCounter = 0;
+
 /**
  * Use this to register only the HTML and MathML builders for a function (e.g.
  * if the function's ParseNode is generated in Parser.js rather than via a
@@ -215,13 +217,34 @@ export function defineFunctionBuilders<NODETYPE: NodeType>({
     htmlBuilder?: HtmlBuilder<NODETYPE>,
     mathmlBuilder: MathMLBuilder<NODETYPE>,
 |}) {
+
+    /*
+     * Wrap MathML builders to annotate all MathML nodes with node indexes
+     * and source locations of LaTeX that generated that node.
+     */
+    const wrappedMathmlBuilder = (group: any, options) => {
+        const node: any = mathmlBuilder(group, options);
+        if (node !== undefined && node !== null) {
+            if (node.setAttribute !== undefined) {
+                const mathNode: MathNode = node;
+                if (group.loc !== undefined) {
+                    mathNode.setAttribute("s2:start", group.loc.start);
+                    mathNode.setAttribute("s2:end", group.loc.end);
+                }
+                mathNode.setAttribute("s2:index", String(nodeCreationCounter));
+                nodeCreationCounter += 1;
+            }
+        }
+        return node;
+    };
+
     defineFunction({
         type,
         names: [],
         props: {numArgs: 0},
         handler() { throw new Error('Should never be called.'); },
         htmlBuilder,
-        mathmlBuilder,
+        mathmlBuilder: wrappedMathmlBuilder,
     });
 }
 
