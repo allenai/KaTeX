@@ -44,8 +44,9 @@ defineFunction({
         "\\textbf", "\\textmd",
         // Font Shapes
         "\\textit", "\\textup",
-        // S2: Aliases other commands that aren't equivalent, but need similar parsing
-        "\\hbox", "\\mbox"
+        // S2: Aliases other commands that aren't equivalent, but should be
+        // parsed in a similar way
+        "\\hbox", "\\mbox",
     ],
     props: {
         numArgs: 1,

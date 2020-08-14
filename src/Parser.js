@@ -363,7 +363,12 @@ export default class Parser {
                 if (superscript) {
                     throw new ParseError("Double superscript", lex);
                 }
-                const prime = {type: "textord", mode: this.mode, text: "\\prime"};
+                const prime = {
+                    type: "textord",
+                    mode: this.mode,
+                    loc: lex.loc,
+                    text: "\\prime"
+                };
 
                 // Many primes can be grouped together, so we handle this here
                 const primes = [prime];
