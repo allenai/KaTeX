@@ -2,8 +2,12 @@
 import {checkNodeType} from "./parseNode";
 
 import type Parser from "./Parser";
-import type {ParseNode, AnyParseNode, NodeType, UnsupportedCmdParseNode}
-    from "./parseNode";
+import type {
+    ParseNode,
+    AnyParseNode,
+    NodeType,
+    UnsupportedCmdParseNode,
+} from "./parseNode";
 import type Options from "./Options";
 import type {ArgType, BreakToken} from "./types";
 import type {HtmlDomNode} from "./domTree";
@@ -26,7 +30,10 @@ export type FunctionHandler<NODETYPE: NodeType> = (
 // Note: reverse the order of the return type union will cause a flow error.
 // See https://github.com/facebook/flow/issues/3663.
 
-export type HtmlBuilder<NODETYPE> = (ParseNode<NODETYPE>, Options) => HtmlDomNode;
+export type HtmlBuilder<NODETYPE> = (
+    ParseNode<NODETYPE>,
+    Options,
+) => HtmlDomNode;
 export type MathMLBuilder<NODETYPE> = (
     group: ParseNode<NODETYPE>,
     options: Options,
@@ -35,8 +42,10 @@ export type MathMLBuilder<NODETYPE> = (
 // More general version of `HtmlBuilder` for nodes (e.g. \sum, accent types)
 // whose presence impacts super/subscripting. In this case, ParseNode<"supsub">
 // delegates its HTML building to the HtmlBuilder corresponding to these nodes.
-export type HtmlBuilderSupSub<NODETYPE> =
-    (ParseNode<"supsub"> | ParseNode<NODETYPE>, Options) => HtmlDomNode;
+export type HtmlBuilderSupSub<NODETYPE> = (
+    ParseNode<"supsub"> | ParseNode<NODETYPE>,
+    Options,
+) => HtmlDomNode;
 
 export type FunctionPropSpec = {
     // The number of arguments the function takes.
@@ -181,11 +190,10 @@ export default function defineFunction<NODETYPE: NodeType>({
         type,
         numArgs: props.numArgs,
         argTypes: props.argTypes,
-        greediness: (props.greediness === undefined) ? 1 : props.greediness,
+        greediness: props.greediness === undefined ? 1 : props.greediness,
         allowedInText: !!props.allowedInText,
-        allowedInMath: (props.allowedInMath === undefined)
-            ? true
-            : props.allowedInMath,
+        allowedInMath:
+            props.allowedInMath === undefined ? true : props.allowedInMath,
         numOptionalArgs: props.numOptionalArgs || 0,
         infix: !!props.infix,
         handler: handler,
@@ -213,15 +221,16 @@ export const nodeCreationCounter = {
  * stand-alone handler provided to `defineFunction`).
  */
 export function defineFunctionBuilders<NODETYPE: NodeType>({
-    type, htmlBuilder, mathmlBuilder,
+    type,
+    htmlBuilder,
+    mathmlBuilder,
 }: {|
     type: NODETYPE,
     htmlBuilder?: HtmlBuilder<NODETYPE>,
     mathmlBuilder: MathMLBuilder<NODETYPE>,
 |}) {
-
     /*
-     * Wrap MathML builders to annotate all MathML nodes with node indexes
+     * S2: Wrap MathML builders to annotate all MathML nodes with node indexes
      * and source locations of LaTeX that generated that node.
      */
     const wrappedMathmlBuilder = (group: any, options) => {
@@ -245,7 +254,9 @@ export function defineFunctionBuilders<NODETYPE: NodeType>({
         type,
         names: [],
         props: {numArgs: 0},
-        handler() { throw new Error('Should never be called.'); },
+        handler() {
+            throw new Error("Should never be called.");
+        },
         htmlBuilder,
         mathmlBuilder: wrappedMathmlBuilder,
     });

@@ -367,7 +367,7 @@ export default class Parser {
                     type: "textord",
                     mode: this.mode,
                     loc: lex.loc,
-                    text: "\\prime"
+                    text: "\\prime",
                 };
 
                 // Many primes can be grouped together, so we handle this here

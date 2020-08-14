@@ -23,7 +23,7 @@ describe("The MathML builder", function() {
         expect(mathMl("mi:contains(x)")).toHaveLength(1);
     });
 
-    it("should annotate symbols with index, start, and end", function() {
+    it("annotates symbols with index, start, and end", function() {
         const tex = "x";
         const mathMl = getMathMLObject(tex);
         const x = mathMl("mi:contains(x)");
@@ -32,12 +32,28 @@ describe("The MathML builder", function() {
         expect(x.attr("s2:end")).not.toBeNull();
     });
 
-    it("includes character offsets for ticks", function() {
+    it("annotates ticks with character offsets", function() {
         const tex = "x'";
         const mathMl = getMathMLObject(tex);
         const tick = mathMl("mo:contains(')");
         expect(tick.attr("s2:start")).toBe("1");
         expect(tick.attr("s2:end")).toBe("2");
+    });
+
+    it("annotates \\textrm strings with character offsets", function() {
+        const tex = "\\textrm{term}";
+        const mathMl = getMathMLObject(tex);
+        const text = mathMl("mtext");
+        expect(text.attr("s2:start")).toBe("8");
+        expect(text.attr("s2:end")).toBe("12");
+    });
+
+    fit("annotations multi-digit numbers with character offsets", function() {
+        const tex = "1000";
+        const mathMl = getMathMLObject(tex);
+        const num = mathMl("mn");
+        expect(num.attr("s2:start")).toBe("0");
+        expect(num.attr("s2:end")).toBe("4");
     });
 
     it("makes <mtext> for text in the 'text' command", function() {
