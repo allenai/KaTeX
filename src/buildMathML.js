@@ -170,7 +170,7 @@ export const buildExpression = function(
                 if (lastGroup.getAttribute("s2:end") !== undefined &&
                     group.getAttribute("s2:end") !== undefined) {
                     lastGroup.setAttribute("s2:end", group.getAttribute("s2:end"));
-                }                
+                }
                 continue;
             // Concatenate <mn>...</mn> followed by <mi>.</mi>
             } else if (group.type === 'mi' && group.children.length === 1 &&

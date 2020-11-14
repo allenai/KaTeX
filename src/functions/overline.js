@@ -12,12 +12,13 @@ defineFunction({
     props: {
         numArgs: 1,
     },
-    handler({parser}, args) {
+    handler({parser, token}, args) {
         const body = args[0];
         return {
             type: "overline",
             mode: parser.mode,
             body,
+            loc: token !== undefined ? token.loc : undefined,
         };
     },
     htmlBuilder(group, options) {
@@ -53,6 +54,19 @@ defineFunction({
             "mover",
             [mml.buildGroup(group.body, options), operator]);
         node.setAttribute("accent", "true");
+
+        const overlineLoc = group.loc;
+        const argumentLoc = group.body.loc;
+        if (overlineLoc !== undefined && overlineLoc !== null) {
+            operator.setAttribute("s2:start", String(overlineLoc.start));
+            operator.setAttribute("s2:end", String(overlineLoc.end));
+            if (argumentLoc !== undefined && argumentLoc !== null) {
+                const overStart = Math.min(overlineLoc.start, argumentLoc.start);
+                const overEnd = Math.max(overlineLoc.end, argumentLoc.end);
+                node.setAttribute("s2:start", String(overStart));
+                node.setAttribute("s2:end", String(overEnd));
+            }
+        }
 
         return node;
     },

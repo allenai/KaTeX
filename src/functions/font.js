@@ -19,7 +19,28 @@ const htmlBuilder = (group: ParseNode<"font">, options) => {
 const mathmlBuilder = (group: ParseNode<"font">, options) => {
     const font = group.font;
     const newOptions = options.withFont(font);
-    return mml.buildGroup(group.body, newOptions);
+    const mmlGroup = mml.buildGroup(group.body, newOptions);
+
+    /*
+     * S2: If a node is styled with a font, adjust its character offsets
+     * to include the macro that styles it.
+     */
+    const fontLoc = group.loc;
+    const mmlGroupStart = mmlGroup.getAttribute("s2:start");
+    const mmlGroupEnd = mmlGroup.getAttribute("s2:end");
+    if (
+        mmlGroupStart !== undefined &&
+        mmlGroupEnd !== undefined &&
+        fontLoc !== undefined &&
+        fontLoc !== null
+    ) {
+        const adjustedStart = Math.min(Number(mmlGroupStart), fontLoc.start);
+        const adjustedEnd = Math.max(Number(mmlGroupEnd), fontLoc.end);
+        mmlGroup.setAttribute("s2:start", String(adjustedStart));
+        mmlGroup.setAttribute("s2:end", String(adjustedEnd));
+    }
+
+    return mmlGroup;
 };
 
 const fontAliases = {
@@ -46,7 +67,7 @@ defineFunction({
         numArgs: 1,
         greediness: 2,
     },
-    handler: ({parser, funcName}, args) => {
+    handler: ({parser, funcName, token}, args) => {
         const body = args[0];
         let func = funcName;
         if (func in fontAliases) {
@@ -57,6 +78,7 @@ defineFunction({
             mode: parser.mode,
             font: func.slice(1),
             body,
+            loc: token !== undefined ? token.loc : undefined,
         };
     },
     htmlBuilder,
@@ -70,7 +92,7 @@ defineFunction({
         numArgs: 1,
         greediness: 2,
     },
-    handler: ({parser}, args) => {
+    handler: ({parser, token}, args) => {
         const body = args[0];
         const isCharacterBox = utils.isCharacterBox(body);
         // amsbsy.sty's \boldsymbol uses \binrel spacing to inherit the
@@ -85,6 +107,7 @@ defineFunction({
                     mode: parser.mode,
                     font: "boldsymbol",
                     body,
+                    loc: token !== undefined ? token.loc : undefined,
                 },
             ],
             isCharacterBox: isCharacterBox,
@@ -100,7 +123,7 @@ defineFunction({
         numArgs: 0,
         allowedInText: true,
     },
-    handler: ({parser, funcName, breakOnTokenText}, args) => {
+    handler: ({parser, funcName, breakOnTokenText, token}, args) => {
         const {mode} = parser;
         const body = parser.parseExpression(true, breakOnTokenText);
         const style = `math${funcName.slice(1)}`;
@@ -114,6 +137,7 @@ defineFunction({
                 mode: parser.mode,
                 body,
             },
+            loc: token !== undefined ? token.loc : undefined,
         };
     },
     htmlBuilder,

@@ -239,8 +239,8 @@ export function defineFunctionBuilders<NODETYPE: NodeType>({
             if (node.setAttribute !== undefined) {
                 const mathNode: MathNode = node;
                 if (group.loc !== undefined) {
-                    mathNode.setAttribute("s2:start", group.loc.start);
-                    mathNode.setAttribute("s2:end", group.loc.end);
+                    mathNode.setAttribute("s2:start", String(group.loc.start));
+                    mathNode.setAttribute("s2:end", String(group.loc.end));
                 }
                 const nodeIndex = String(nodeCreationCounter.count);
                 mathNode.setAttribute("s2:index", nodeIndex);

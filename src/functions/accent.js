@@ -197,6 +197,19 @@ const mathmlBuilder: MathMLBuilder<"accent"> = (group, options) => {
 
     node.setAttribute("accent", "true");
 
+    const accentLoc = group.loc;
+    const baseLoc = group.base.loc;
+    if (accentLoc !== undefined && accentLoc !== null) {
+        accentNode.setAttribute("s2:start", String(accentLoc.start));
+        accentNode.setAttribute("s2:end", String(accentLoc.end));
+        if (baseLoc !== undefined && baseLoc !== null) {
+            const overStart = Math.min(accentLoc.start, baseLoc.start);
+            const overEnd = Math.max(accentLoc.end, baseLoc.end);
+            node.setAttribute("s2:start", String(overStart));
+            node.setAttribute("s2:end", String(overEnd));
+        }
+    }
+
     return node;
 };
 
@@ -233,6 +246,7 @@ defineFunction({
             label: context.funcName,
             isStretchy: isStretchy,
             isShifty: isShifty,
+            loc: context.token !== undefined ? context.token.loc : undefined,
             base: base,
         };
     },
