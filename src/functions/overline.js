@@ -55,6 +55,7 @@ defineFunction({
             [mml.buildGroup(group.body, options), operator]);
         node.setAttribute("accent", "true");
 
+        // S2: Annotate overline with character offset information.
         const overlineLoc = group.loc;
         const argumentLoc = group.body.loc;
         if (overlineLoc !== undefined && overlineLoc !== null) {

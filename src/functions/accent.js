@@ -197,6 +197,7 @@ const mathmlBuilder: MathMLBuilder<"accent"> = (group, options) => {
 
     node.setAttribute("accent", "true");
 
+    // S2: Annotate accents with character offset information.
     const accentLoc = group.loc;
     const baseLoc = group.base.loc;
     if (accentLoc !== undefined && accentLoc !== null) {

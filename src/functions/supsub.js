@@ -264,6 +264,8 @@ defineFunctionBuilders({
 
         const node = new mathMLTree.MathNode(nodeType, children);
 
+        // S2: Annotate subscript and superscript nodes with the location
+        // of the text used to create them.
         if (
             nodeType === "msub" ||
             nodeType === "msup" ||
