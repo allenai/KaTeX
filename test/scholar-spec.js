@@ -76,6 +76,72 @@ describe("The MathML builder", function() {
         });
     });
 
+    describe("creates compound symbols", function() {
+        it("annotated with character offsets", function() {
+            const tex = "{x}_{i}";
+            const mathMl = getMathMLObject(tex);
+            const msub = mathMl("msub");
+            expect(msub.attr("s2:start")).toBe("0");
+            expect(msub.attr("s2:end")).toBe("7");
+        });
+
+        it("annotated with offsets containing list children", function() {
+            const tex = "x_{n,i}";
+            const mathMl = getMathMLObject(tex);
+            const msub = mathMl("msub");
+            expect(msub.attr("s2:start")).toBe("0");
+            expect(msub.attr("s2:end")).toBe("7");
+        });
+
+        it("annotated with offsets containing compound children", function() {
+            const tex = "x^{n_i}";
+            const mathMl = getMathMLObject(tex);
+            const msup = mathMl("msup");
+            expect(msup.attr("s2:start")).toBe("0");
+            expect(msup.attr("s2:end")).toBe("7");
+        });
+
+        it("annotated with offsets for primes", function() {
+            const tex = "x'";
+            const mathMl = getMathMLObject(tex);
+            const msup = mathMl("msup");
+            expect(msup.attr("s2:start")).toBe("0");
+            expect(msup.attr("s2:end")).toBe("2");
+        });
+
+        it("annotated with offsets for primes with superscripts", function() {
+            const tex = "x'^n";
+            const mathMl = getMathMLObject(tex);
+            const msup = mathMl("msup");
+            expect(msup.attr("s2:start")).toBe("0");
+            expect(msup.attr("s2:end")).toBe("4");
+        });
+
+        it("annotated with offsets including style macros", function() {
+            const tex = "\\mathcal{x_i}";
+            const mathMl = getMathMLObject(tex);
+            /*
+             * Positions of the subscript node should take into account the
+             * style macro...
+             */
+            const msub = mathMl("msub");
+            expect(msub.attr("s2:start")).toBe("0");
+            expect(msub.attr("s2:end")).toBe("13");
+            /*
+             * But the positions of the sub-symbols ('x' and 'i') should not. This
+             * is because the positions are meant to serve as an index into the
+             * standalone parts of the TeX string that can be formatted
+             * independently (i.e., bolded or colored).
+             */
+            const x = mathMl("mi:contains(x)");
+            expect(x.attr("s2:start")).toBe("9");
+            expect(x.attr("s2:end")).toBe("10");
+            const i = mathMl("mi:contains(i)");
+            expect(i.attr("s2:start")).toBe("11");
+            expect(i.attr("s2:end")).toBe("12");
+        });
+    });
+
     describe("creates ticks", function() {
         it("annotated with character offsets", function() {
             const tex = "x'";

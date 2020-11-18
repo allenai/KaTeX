@@ -264,6 +264,37 @@ defineFunctionBuilders({
 
         const node = new mathMLTree.MathNode(nodeType, children);
 
+        if (
+            nodeType === "msub" ||
+            nodeType === "msup" ||
+            nodeType === "msubsup"
+        ) {
+            const childNodes = [group.base];
+            if (nodeType === "msub" || nodeType === "msubsup") {
+                childNodes.push(group.sub);
+            }
+            if (nodeType === "msup" || nodeType === "msubsup") {
+                childNodes.push(group.sup);
+            }
+            const startOffsets = [];
+            const endOffsets = [];
+            childNodes.forEach(n => {
+                if (n === undefined || n === null) {
+                    return;
+                }
+                const nodeLoc = n.loc;
+                if (nodeLoc === undefined || nodeLoc === null) {
+                    return;
+                }
+                startOffsets.push(nodeLoc.start);
+                endOffsets.push(nodeLoc.end);
+            });
+            if (startOffsets.length > 0 && endOffsets.length > 0) {
+                node.setAttribute("s2:start", String(Math.min(...startOffsets)));
+                node.setAttribute("s2:end", String(Math.max(...endOffsets)));
+            }
+        }
+
         return node;
     },
 });

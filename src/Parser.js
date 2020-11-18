@@ -371,6 +371,7 @@ export default class Parser {
                 };
 
                 // Many primes can be grouped together, so we handle this here
+                const startLoc = lex.loc;
                 const primes = [prime];
                 this.consume();
                 // Keep lexing tokens until we get something that's not a prime
@@ -385,7 +386,26 @@ export default class Parser {
                     primes.push(this.handleSupSubscript("superscript"));
                 }
                 // Put everything into an ordgroup as the superscript
-                superscript = {type: "ordgroup", mode: this.mode, body: primes};
+                const endLoc = primes[primes.length - 1].loc;
+                let loc;
+                if (
+                    startLoc !== undefined &&
+                    startLoc !== null &&
+                    endLoc !== undefined &&
+                    endLoc !== null
+                ) {
+                    loc = new SourceLocation(
+                        startLoc.lexer,
+                        startLoc.start,
+                        endLoc.end,
+                    );
+                }
+                superscript = {
+                    type: "ordgroup",
+                    mode: this.mode,
+                    body: primes,
+                    loc,
+                };
             } else {
                 // If it wasn't ^, _, or ', stop parsing super/subscripts
                 break;
