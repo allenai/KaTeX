@@ -111,6 +111,7 @@ defineFunction({
                 },
             ],
             isCharacterBox: isCharacterBox,
+            loc: token !== undefined ? token.loc : undefined,
         };
     },
 });

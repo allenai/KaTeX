@@ -140,6 +140,14 @@ describe("The MathML builder", function() {
             expect(i.attr("s2:start")).toBe("11");
             expect(i.attr("s2:end")).toBe("12");
         });
+
+        it("annotated with offsets including subsymbol style macros", function() {
+            const tex = "\\bm{x}_i";
+            const mathMl = getMathMLObject(tex);
+            const msub = mathMl("msub");
+            expect(msub.attr("s2:start")).toBe("0");
+            expect(msub.attr("s2:end")).toBe("8");
+        });
     });
 
     describe("creates ticks", function() {
