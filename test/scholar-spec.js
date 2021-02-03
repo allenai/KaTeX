@@ -59,7 +59,7 @@ describe("The MathML builder", function() {
             expect(X.attr("s2:end")).toBe("10");
         });
 
-        it("from the '\\bm' style macro)", function() {
+        it("from the '\\bm' style macro", function() {
             const tex = "\\bm x";
             const mathMl = getMathMLObject(tex);
             const x = mathMl("mi:contains(x)");
@@ -67,12 +67,20 @@ describe("The MathML builder", function() {
             expect(x.attr("s2:end")).toBe("5");
         });
 
-        it("from the '\\rm' style macro)", function() {
+        it("from the '\\rm' style macro", function() {
             const tex = "\\rm x";
             const mathMl = getMathMLObject(tex);
             const x = mathMl("mi:contains(x)");
             expect(x.attr("s2:start")).toBe("0");
             expect(x.attr("s2:end")).toBe("5");
+        });
+
+        it("for the '\\R' macro", function() {
+            const tex = "\\R";
+            const mathMl = getMathMLObject(tex);
+            const x = mathMl("mi");
+            expect(x.attr("s2:start")).toBe("0");
+            expect(x.attr("s2:end")).toBe("2");
         });
     });
 

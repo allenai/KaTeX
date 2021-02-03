@@ -12,6 +12,7 @@ import type {Mode} from "./types";
 import ParseError from "./ParseError";
 import Namespace from "./Namespace";
 import builtinMacros from "./macros";
+import SourceLocation from "./SourceLocation";
 
 import type {MacroContextInterface, MacroDefinition, MacroExpansion}
     from "./macros";
@@ -183,6 +184,19 @@ export default class MacroExpander implements MacroContextInterface {
      */
     expandOnce(): Token | Token[] {
         const topToken = this.popToken();
+
+        /*
+         * S2: Save the location of the macro to be expanded. This location
+         * will be transferred to the tokens that this macro is expanded to.
+         */
+        const topTokenLoc = topToken.loc;
+        let start = -1;
+        let end = -1;
+        if (topTokenLoc !== undefined && topTokenLoc !== null) {
+            start = topTokenLoc.start;
+            end = topTokenLoc.end;
+        }
+
         const name = topToken.text;
         const expansion = this._getExpansion(name);
         if (expansion == null) { // mainly checking for undefined here
@@ -198,6 +212,25 @@ export default class MacroExpander implements MacroContextInterface {
         let tokens = expansion.tokens;
         if (expansion.numArgs) {
             const args = this.consumeArgs(expansion.numArgs);
+
+            /*
+             * S2: Update the span of the expanded tokens to include the
+             * span of the arguments.
+             */
+            for (let a = 0; a < args.length; a++) {
+                for (let t = 0; t < args[a].length; t++) {
+                    const tokenLoc = args[a][t].loc;
+                    if (
+                        tokenLoc !== null &&
+                        tokenLoc !== undefined &&
+                        tokenLoc.start !== -1 &&
+                        tokenLoc.end > end
+                    ) {
+                        end = tokenLoc.end;
+                    }
+                }
+            }
+
             // paste arguments in place of the placeholders
             tokens = tokens.slice(); // make a shallow copy
             for (let i = tokens.length - 1; i >= 0; --i) {
@@ -222,6 +255,15 @@ export default class MacroExpander implements MacroContextInterface {
                 }
             }
         }
+
+        /*
+         * S2: Assign all tokens in an expansion the character offsets of
+         * the macros and arguments they were generated from.
+         */
+        for (let i = 0; i < tokens.length; i++) {
+            tokens[i].loc = new SourceLocation(this.lexer, start, end);
+        }
+
         // Concatenate expansion onto top of stack.
         this.pushTokens(tokens);
         return tokens;
