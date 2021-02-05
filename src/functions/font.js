@@ -57,7 +57,7 @@ defineFunction({
         "\\mathrm", "\\mathit", "\\mathbf", "\\mathnormal",
 
         // families
-        "\\mathbb", "\\mathcal", "\\mathfrak", "\\mathscr", "\\mathsf",
+        "\\mathbb", "\\mathds", "\\mathcal", "\\mathfrak", "\\mathscr", "\\mathsf",
         "\\mathtt",
 
         // aliases, except \bm defined below

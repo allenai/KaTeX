@@ -96,7 +96,7 @@ export const getVariant = function(
         return "bold-italic";
     } else if (font === "mathbf") {
         return "bold";
-    } else if (font === "mathbb") {
+    } else if (font === "mathbb" || font === "mathds") {
         return "double-struck";
     } else if (font === "mathfrak") {
         return "fraktur";
