@@ -23,6 +23,15 @@ describe("The MathML builder", function() {
         expect(mathMl("mi:contains(x)")).toHaveLength(1);
     });
 
+    describe("parses common macros", function() {
+        it("including \\mathds", function() {
+            const tex = "\\mathds{1}";
+            const mathMl = getMathMLObject(tex);
+            const one = mathMl("mn");
+            expect(one.attr("mathvariant")).toBe("double-struck");
+        });
+    });
+
     describe("creates identifiers", function() {
         it("annotated with index, start, and end", function() {
             const tex = "x";

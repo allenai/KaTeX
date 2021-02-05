@@ -765,6 +765,10 @@ const fontMap: {[string]: {| variant: FontVariant, fontName: string |}} = {
         variant: "double-struck",
         fontName: "AMS-Regular",
     },
+    "mathds": {
+        variant: "double-struck",
+        fontName: "AMS-Regular",
+    },
     "mathcal": {
         variant: "script",
         fontName: "Caligraphic-Regular",

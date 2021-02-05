@@ -66,7 +66,7 @@ const wideLatinLetterData: Array<[string, string, string]> = [
 
 const wideNumeralData: Array<[string, string, string]> = [
     ["mathbf", "textbf", "Main-Bold"],                // 0-9 bold
-    ["", "", ""],                         // 0-9 double-struck. No KaTeX font.
+    ["mathds", "", "AMS-Regular"],                    // 0-9 double-struck
     ["mathsf", "textsf", "SansSerif-Regular"],        // 0-9 sans-serif
     ["mathboldsf", "textboldsf", "SansSerif-Bold"],   // 0-9 bold sans-serif
     ["mathtt", "texttt", "Typewriter-Regular"],       // 0-9 monospace
