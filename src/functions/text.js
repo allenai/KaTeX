@@ -1,6 +1,7 @@
 // @flow
 import defineFunction, {ordargument} from "../defineFunction";
 import buildCommon from "../buildCommon";
+import SourceLocation from "../SourceLocation";
 
 import * as html from "../buildHTML";
 import * as mml from "../buildMathML";
@@ -54,13 +55,38 @@ defineFunction({
         greediness: 2,
         allowedInText: true,
     },
-    handler({parser, funcName}, args) {
+    handler({parser, funcName, token}, args) {
         const body = args[0];
+
+        /*
+         * S2: Adjust the location of a text element to include both the macro
+         * (stored in the 'token' object) and the argument to the text macro
+         * (stored in the 'body' variable).
+         */
+        let loc;
+        if (token !== undefined) {
+            const tokenLoc = token.loc;
+            const bodyLoc = body.loc;
+            if (
+                tokenLoc !== undefined &&
+                tokenLoc !== null &&
+                bodyLoc !== undefined &&
+                bodyLoc !== null
+            ) {
+                loc = new SourceLocation(
+                    parser.gullet.lexer,
+                    tokenLoc.start,
+                    bodyLoc.end
+                );
+            }
+        }
+
         return {
             type: "text",
             mode: parser.mode,
             body: ordargument(body),
             font: funcName,
+            loc,
         };
     },
     htmlBuilder(group, options) {
