@@ -162,6 +162,14 @@ describe("The MathML builder", function() {
             expect(msub.attr("s2:start")).toBe("0");
             expect(msub.attr("s2:end")).toBe("8");
         });
+
+        it("annotated with offsets including text subsymbols", function() {
+            const tex = "x_\\textrm{text}";
+            const mathMl = getMathMLObject(tex);
+            const msub = mathMl("msub");
+            expect(msub.attr("s2:start")).toBe("0");
+            expect(msub.attr("s2:end")).toBe("15");
+        });
     });
 
     describe("creates ticks", function() {
