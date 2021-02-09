@@ -97,6 +97,15 @@ describe("The MathML builder", function() {
             expect(x.attr("s2:start")).toBe("0");
             expect(x.attr("s2:end")).toBe("2");
         });
+
+        it("with annotations for text operators", function() {
+            const tex = "\\log x";
+            const mathMl = getMathMLObject(tex);
+            const log = mathMl("mi:contains(log)");
+            expect(log.attr("s2:start")).toBe("0");
+            expect(log.attr("s2:end")).toBe("4");
+            expect(log.attr("s2:is-operator")).toBe("true");
+        });
     });
 
     describe("creates compound symbols", function() {

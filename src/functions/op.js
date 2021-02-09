@@ -3,6 +3,7 @@
 import defineFunction, {ordargument} from "../defineFunction";
 import buildCommon from "../buildCommon";
 import {SymbolNode} from "../domTree";
+import {DocumentFragment} from "../tree";
 import * as mathMLTree from "../mathMLTree";
 import utils from "../utils";
 import Style from "../Style";
@@ -175,6 +176,40 @@ const mathmlBuilder: MathMLBuilder<"op"> = (group, options) => {
         }
     }
 
+    /*
+     * S2: Annotate operators with their character offsets from the TeX.
+     */
+    const groupLoc = group.loc;
+    let mainNode;
+    if (node instanceof DocumentFragment) {
+        mainNode = node.children[0];
+    } else {
+        mainNode = node;
+    }
+
+    if (
+        groupLoc !== undefined &&
+        groupLoc !== null &&
+        mainNode instanceof mathMLTree.MathNode
+    ) {
+        const start = groupLoc.start;
+        let end = groupLoc.end;
+        /*
+         * Strip trailing spaces from operator (e.g., the ' ' after '\log' in
+         * '\log x'), which is included in the operator token by default (see
+         * regex rule 'controlWordWhitespaceRegexString' in Lexer.js).
+         */
+        const space = /\s+$/.exec(groupLoc.lexer.input.substr(0, end));
+        if (space !== null) {
+            end = space.index;
+        }
+        mainNode.setAttribute("s2:start", String(start));
+        mainNode.setAttribute("s2:end", String(end));
+        if (mainNode.type === "mi") {
+            mainNode.setAttribute("s2:is-operator", "true");
+        }
+    }
+
     return node;
 };
 
@@ -205,7 +240,7 @@ defineFunction({
     props: {
         numArgs: 0,
     },
-    handler: ({parser, funcName}, args) => {
+    handler: ({parser, funcName, token}, args) => {
         let fName = funcName;
         if (fName.length === 1) {
             fName = singleCharBigOps[fName];
@@ -217,6 +252,7 @@ defineFunction({
             parentIsSupSub: false,
             symbol: true,
             name: fName,
+            loc: token !== undefined ? token.loc : undefined,
         };
     },
     htmlBuilder,
@@ -231,7 +267,7 @@ defineFunction({
     props: {
         numArgs: 1,
     },
-    handler: ({parser}, args) => {
+    handler: ({parser, token}, args) => {
         const body = args[0];
         return {
             type: "op",
@@ -240,6 +276,7 @@ defineFunction({
             parentIsSupSub: false,
             symbol: false,
             body: ordargument(body),
+            loc: token !== undefined ? token.loc : undefined,
         };
     },
     htmlBuilder,
@@ -272,7 +309,7 @@ defineFunction({
     props: {
         numArgs: 0,
     },
-    handler({parser, funcName}) {
+    handler({parser, funcName, token}) {
         return {
             type: "op",
             mode: parser.mode,
@@ -280,6 +317,7 @@ defineFunction({
             parentIsSupSub: false,
             symbol: false,
             name: funcName,
+            loc: token !== undefined ? token.loc : undefined,
         };
     },
     htmlBuilder,
@@ -295,7 +333,7 @@ defineFunction({
     props: {
         numArgs: 0,
     },
-    handler({parser, funcName}) {
+    handler({parser, funcName, token}) {
         return {
             type: "op",
             mode: parser.mode,
@@ -303,6 +341,7 @@ defineFunction({
             parentIsSupSub: false,
             symbol: false,
             name: funcName,
+            loc: token !== undefined ? token.loc : undefined,
         };
     },
     htmlBuilder,
@@ -319,7 +358,7 @@ defineFunction({
     props: {
         numArgs: 0,
     },
-    handler({parser, funcName}) {
+    handler({parser, funcName, token}) {
         let fName = funcName;
         if (fName.length === 1) {
             fName = singleCharIntegrals[fName];
@@ -331,6 +370,7 @@ defineFunction({
             parentIsSupSub: false,
             symbol: true,
             name: fName,
+            loc: token !== undefined ? token.loc : undefined,
         };
     },
     htmlBuilder,
