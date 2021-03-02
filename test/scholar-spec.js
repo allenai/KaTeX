@@ -75,6 +75,12 @@ describe("The MathML builder", function() {
             expect(x.attr("s2:end")).toBe("5");
         });
 
+        /*
+         * The following behavior should hold for all macros defined in 'macros.js',
+         * of which '\R' is just one case. The desired behavior is that
+         * the nodes created by expanding a macro are all assigned the character
+         * position of the macro and its arguments.
+         */
         it("for the '\\R' macro", function() {
             const tex = "\\R";
             const mathMl = getMathMLObject(tex);
