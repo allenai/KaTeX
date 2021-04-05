@@ -162,34 +162,66 @@ describe("The MathML builder", function() {
 
     describe("creates text", function() {
         it("annotated with character offsets", function() {
-            const tex = "\\textrm{term}";
+            const tex = "\\textrm{T}";
             const mathMl = getMathMLObject(tex);
             const text = mathMl("mtext");
             expect(text.attr("s2:start")).toBe("8");
-            expect(text.attr("s2:end")).toBe("12");
+            expect(text.attr("s2:end")).toBe("9");
+        });
+
+        it("with each letter in its own node", function() {
+            const tex = "\\textrm{hi}";
+            const mathMl = getMathMLObject(tex);
+            const text = mathMl("mtext");
+            expect(text).toHaveLength(2);
+            expect(text.eq(0).text()).toBe("h");
+            expect(text.eq(0).attr("s2:start")).toBe("8");
+            expect(text.eq(0).attr("s2:end")).toBe("9");
+            expect(text.eq(1).text()).toBe("i");
+            expect(text.eq(1).attr("s2:start")).toBe("9");
+            expect(text.eq(1).attr("s2:end")).toBe("10");
         });
 
         it("from text in a '\\text' macro", function() {
-            const tex = "\\text{Text}";
+            const tex = "\\text{T}";
             const mathMl = getMathMLObject(tex);
-            expect(mathMl("mtext:contains(Text)")).toHaveLength(1);
+            expect(mathMl("mtext:contains(T)")).toHaveLength(1);
         });
 
         it("from '\\mbox's", function() {
-            const tex = "\\mbox{Text $x$}";
+            const tex = "\\mbox{T $x$}";
             const mathMl = getMathMLObject(tex);
-            expect(mathMl("mtext:contains(Text)")).toHaveLength(1);
+            expect(mathMl("mtext:contains(T)")).toHaveLength(1);
             expect(mathMl("mi:contains(x)")).toHaveLength(1);
         });
     });
 
     describe("creates numbers", function() {
         it("annotated with character offsets", function() {
-            const tex = "1000";
+            const tex = "1";
             const mathMl = getMathMLObject(tex);
             const num = mathMl("mn");
             expect(num.attr("s2:start")).toBe("0");
-            expect(num.attr("s2:end")).toBe("4");
+            expect(num.attr("s2:end")).toBe("1");
+        });
+
+        /*
+         * KaTeX has been modified to keep all letters and digits
+         * in separate nodes, so that offsets of every letter in
+         * the TeX can be recovered. This is required by our symbol
+         * extraction pipeline, which will attempt to extract the
+         * TeX for every single letter.
+         */
+        it("with each digit in a separate node", function() {
+            const tex = "42";
+            const mathMl = getMathMLObject(tex);
+            const nums = mathMl("mn");
+            expect(nums.eq(0).text()).toBe("4");
+            expect(nums.eq(0).attr("s2:start")).toBe("0");
+            expect(nums.eq(0).attr("s2:end")).toBe("1");
+            expect(nums.eq(1).text()).toBe("2");
+            expect(nums.eq(1).attr("s2:start")).toBe("1");
+            expect(nums.eq(1).attr("s2:end")).toBe("2");
         });
     });
 

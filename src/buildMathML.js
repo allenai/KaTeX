@@ -152,6 +152,18 @@ export const buildExpression = function(
     for (let i = 0; i < expression.length; i++) {
         const group = buildGroup(expression[i], options);
         if (group instanceof MathNode && lastGroup instanceof MathNode) {
+            /*
+            * S2: Disable the code below that merges consecutive letters together.
+            * By disabling this code, each letter remains in a node of its own.
+            * For instance, the number 1000 will consist of 4 'mn' nodes, one for
+            * each of the digits 1, 0, 0, and 0. The text 'hello' will consist of
+            * 5 'mtext' nodes, one for each letter 'h', 'e', 'l', 'l', and 'o'.
+            * Merging letters is disabled because this KaTeX code is used for the
+            * downstream task of detecting the character offsets of every single
+            * letter that makes up a larger symbol. Merging on letters into larger
+            * parent symbols is handled downstream outside of KaTeX.
+            */
+            /*
             // Concatenate adjacent <mtext>s
             if (group.type === 'mtext' && lastGroup.type === 'mtext'
                 && group.getAttribute('mathvariant') ===
@@ -194,6 +206,7 @@ export const buildExpression = function(
                     }
                 }
             }
+            */
         }
         groups.push(group);
         lastGroup = group;
