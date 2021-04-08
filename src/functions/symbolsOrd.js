@@ -2,6 +2,7 @@
 import {defineFunctionBuilders} from "../defineFunction";
 import buildCommon from "../buildCommon";
 import mathMLTree from "../mathMLTree";
+import {setFontAttribute} from "../s2-utils";
 
 import * as mml from "../buildMathML";
 
@@ -30,6 +31,11 @@ defineFunctionBuilders({
         if (variant !== defaultVariant[node.type]) {
             node.setAttribute("mathvariant", variant);
         }
+        /*
+         * S2: Annotate node with attribute declaring what LaTeX fonts have been
+         * applied to this symbol.
+         */
+        setFontAttribute(node, options);
         return node;
     },
 });
@@ -58,6 +64,11 @@ defineFunctionBuilders({
         if (variant !== defaultVariant[node.type]) {
             node.setAttribute("mathvariant", variant);
         }
+        /*
+         * S2: Annotate node with attribute declaring what LaTeX fonts have been
+         * applied to this symbol.
+         */
+        setFontAttribute(node, options);
 
         return node;
     },
