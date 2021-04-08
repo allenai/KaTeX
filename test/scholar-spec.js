@@ -51,37 +51,48 @@ describe("The MathML builder", function() {
             expect(x.attr("s2:end")).toBe("8");
         });
 
-        it("from style macros without braces", function() {
+        it("from style macros with braces", function() {
             const tex = "\\mathcal{X}";
             const mathMl = getMathMLObject(tex);
             const X = mathMl("mi:contains(X)");
             expect(X.attr("mathvariant")).toBe("script");
-            expect(X.attr("s2:start")).toBe("0");
+            expect(X.attr("s2:start")).toBe("8");
             expect(X.attr("s2:end")).toBe("11");
+            expect(X.attr("s2:style-start")).toBe("0");
+            expect(X.attr("s2:style-end")).toBe("11");
         });
 
-        it("from style macros with braces", function() {
+        it("from style macros without braces", function() {
             const tex = "\\mathcal X";
             const mathMl = getMathMLObject(tex);
             const X = mathMl("mi:contains(X)");
-            expect(X.attr("s2:start")).toBe("0");
+            expect(X.attr("s2:start")).toBe("9");
             expect(X.attr("s2:end")).toBe("10");
+            expect(X.attr("s2:style-start")).toBe("0");
+            expect(X.attr("s2:style-end")).toBe("10");
         });
 
         it("from the '\\bm' style macro", function() {
             const tex = "\\bm x";
             const mathMl = getMathMLObject(tex);
             const x = mathMl("mi:contains(x)");
-            expect(x.attr("s2:start")).toBe("0");
-            expect(x.attr("s2:end")).toBe("5");
+            expect(x.attr("s2:style-start")).toBe("0");
+            expect(x.attr("s2:style-end")).toBe("5");
         });
 
         it("from the '\\rm' style macro", function() {
             const tex = "\\rm x";
             const mathMl = getMathMLObject(tex);
             const x = mathMl("mi:contains(x)");
-            expect(x.attr("s2:start")).toBe("0");
-            expect(x.attr("s2:end")).toBe("5");
+            expect(x.attr("s2:style-start")).toBe("0");
+            expect(x.attr("s2:style-end")).toBe("5");
+        });
+
+        it("annotated with style macros that formatted it", function() {
+            const tex = "\\mathcal{X}";
+            const mathMl = getMathMLObject(tex);
+            const X = mathMl("mi");
+            expect(X.attr("s2:font-macros")).toEqual("mathcal");
         });
 
         /*
@@ -157,8 +168,10 @@ describe("The MathML builder", function() {
              * style macro...
              */
             const msub = mathMl("msub");
-            expect(msub.attr("s2:start")).toBe("0");
+            expect(msub.attr("s2:start")).toBe("8");
             expect(msub.attr("s2:end")).toBe("13");
+            expect(msub.attr("s2:style-start")).toBe("0");
+            expect(msub.attr("s2:style-end")).toBe("13");
             /*
              * But the positions of the sub-symbols ('x' and 'i') should not. This
              * is because the positions are meant to serve as an index into the
@@ -190,13 +203,12 @@ describe("The MathML builder", function() {
         });
     });
 
-    describe("creates ticks", function() {
-        it("annotated with character offsets", function() {
-            const tex = "x'";
+    describe("creates operators", function() {
+        it("annotated with style macros that formatted it", function() {
+            const tex = "\\boldsymbol{+}";
             const mathMl = getMathMLObject(tex);
-            const tick = mathMl("mo:contains(')");
-            expect(tick.attr("s2:start")).toBe("1");
-            expect(tick.attr("s2:end")).toBe("2");
+            const plus = mathMl("mo");
+            expect(plus.attr("s2:font-macros")).toEqual("boldsymbol");
         });
     });
 
@@ -234,6 +246,13 @@ describe("The MathML builder", function() {
             expect(mathMl("mtext:contains(T)")).toHaveLength(1);
             expect(mathMl("mi:contains(x)")).toHaveLength(1);
         });
+
+        it("annotated with style macros that formatted it", function() {
+            const tex = "\\text{\\textbf{T}}";
+            const mathMl = getMathMLObject(tex);
+            const text = mathMl("mtext");
+            expect(text.attr("s2:font-macros")).toEqual("textbf");
+        });
     });
 
     describe("creates numbers", function() {
@@ -262,6 +281,23 @@ describe("The MathML builder", function() {
             expect(nums.eq(1).text()).toBe("2");
             expect(nums.eq(1).attr("s2:start")).toBe("1");
             expect(nums.eq(1).attr("s2:end")).toBe("2");
+        });
+
+        it("annotated with style macros that formatted it", function() {
+            const tex = "\\mathbf{1}";
+            const mathMl = getMathMLObject(tex);
+            const text = mathMl("mn");
+            expect(text.attr("s2:font-macros")).toEqual("mathbf");
+        });
+    });
+
+    describe("creates ticks", function() {
+        it("annotated with character offsets", function() {
+            const tex = "x'";
+            const mathMl = getMathMLObject(tex);
+            const tick = mathMl("mo:contains(')");
+            expect(tick.attr("s2:start")).toBe("1");
+            expect(tick.attr("s2:end")).toBe("2");
         });
     });
 

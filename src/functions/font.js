@@ -36,8 +36,8 @@ const mathmlBuilder = (group: ParseNode<"font">, options) => {
     ) {
         const adjustedStart = Math.min(Number(mmlGroupStart), fontLoc.start);
         const adjustedEnd = Math.max(Number(mmlGroupEnd), fontLoc.end);
-        mmlGroup.setAttribute("s2:start", String(adjustedStart));
-        mmlGroup.setAttribute("s2:end", String(adjustedEnd));
+        mmlGroup.setAttribute("s2:style-start", String(adjustedStart));
+        mmlGroup.setAttribute("s2:style-end", String(adjustedEnd));
     }
 
     return mmlGroup;
