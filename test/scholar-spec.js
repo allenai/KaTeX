@@ -301,5 +301,12 @@ describe("The MathML builder", function() {
             expect(line.attr("s2:start")).toBe("0");
             expect(line.attr("s2:end")).toBe("10");
         });
+
+        it("annotated with style macros that formatted it", function() {
+            const tex = "\\mathbf{\\bar x}";
+            const mathMl = getMathMLObject(tex);
+            const bar = mathMl("mo");
+            expect(bar.attr("s2:font-macros")).toEqual("mathbf");
+        });
     });
 });
