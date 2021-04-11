@@ -6,6 +6,7 @@ import utils from "../utils";
 import stretchy from "../stretchy";
 import {assertNodeType, checkNodeType} from "../parseNode";
 import {assertSpan, assertSymbolDomNode} from "../domTree";
+import {setFontAttribute} from "../s2-utils";
 
 import * as html from "../buildHTML";
 import * as mml from "../buildMathML";
@@ -190,6 +191,12 @@ const mathmlBuilder: MathMLBuilder<"accent"> = (group, options) => {
         group.isStretchy ?
             stretchy.mathMLnode(group.label) :
             new mathMLTree.MathNode("mo", [mml.makeText(group.label, group.mode)]);
+
+    /*
+     * S2: Annotate accent node with attribute declaring what LaTeX fonts have been
+     * applied to this accent.
+     */
+    setFontAttribute(accentNode, options);
 
     const node = new mathMLTree.MathNode(
         "mover",
