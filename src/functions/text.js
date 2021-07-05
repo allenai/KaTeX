@@ -1,10 +1,12 @@
 // @flow
 import defineFunction, {ordargument} from "../defineFunction";
 import buildCommon from "../buildCommon";
-import SourceLocation from "../SourceLocation";
 
 import * as html from "../buildHTML";
 import * as mml from "../buildMathML";
+
+import type {MathNode} from "../mathMLTree";
+import SourceLocation from "../SourceLocation";
 
 // Non-mathy text, possibly in a font
 const textFontFamilies = {
@@ -57,30 +59,10 @@ defineFunction({
     },
     handler({parser, funcName, token}, args) {
         const body = args[0];
-
-        /*
-         * S2: Adjust the location of a text element to include both the macro
-         * (stored in the 'token' object) and the argument to the text macro
-         * (stored in the 'body' variable).
-         */
-        let loc;
+        let loc = undefined;
         if (token !== undefined) {
-            const tokenLoc = token.loc;
-            const bodyLoc = body.loc;
-            if (
-                tokenLoc !== undefined &&
-                tokenLoc !== null &&
-                bodyLoc !== undefined &&
-                bodyLoc !== null
-            ) {
-                loc = new SourceLocation(
-                    parser.gullet.lexer,
-                    tokenLoc.start,
-                    bodyLoc.end
-                );
-            }
+            loc = SourceLocation.range(token, body);
         }
-
         return {
             type: "text",
             mode: parser.mode,
@@ -97,6 +79,21 @@ defineFunction({
     },
     mathmlBuilder(group, options) {
         const newOptions = optionsWithFont(group, options);
-        return mml.buildExpressionRow(group.body, newOptions);
+        const row = mml.buildExpressionRow(group.body, newOptions);
+
+        /*
+         * S2: Annotate node with position of the '\text' macro and the group it
+         * applies to (including curly braces).
+         */
+        if (row.constructor.name === "MathNode") {
+            const rowNode = ((row: any): MathNode);
+            const textLoc = group.loc;
+            if (textLoc !== undefined && textLoc !== null) {
+                rowNode.setAttribute("s2:style-start", String(textLoc.start));
+                rowNode.setAttribute("s2:style-end", String(textLoc.end));
+            }
+        }
+
+        return row;
     },
 });

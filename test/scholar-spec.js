@@ -224,6 +224,9 @@ describe("The MathML builder", function() {
         it("with each letter in its own node", function() {
             const tex = "\\textrm{hi}";
             const mathMl = getMathMLObject(tex);
+            const row = mathMl("mrow");
+            expect(row.attr("s2:style-start")).toBe("0");
+            expect(row.attr("s2:style-end")).toBe("11");
             const text = mathMl("mtext");
             expect(text).toHaveLength(2);
             expect(text.eq(0).text()).toBe("h");
